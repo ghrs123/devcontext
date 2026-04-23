@@ -91,10 +91,20 @@ public class RecommendationEngine {
         log.debug("BodyProfile computed: {}", profile);
 
         // Step 2: Resolve product — tenant-scoped.
-        Product product = productRepository.findByIdAndTenantId(input.getProductId(), input.getTenantId())
-                .orElseThrow(() -> new ProductNotFoundException(
-                        "Product not found: productId=" + input.getProductId()
-                                + ", tenantId=" + input.getTenantId()));
+        // Support lookup by UUID (dashboard) or by externalProductId (widget).
+        Product product;
+        if (input.getProductId() != null) {
+            product = productRepository.findByIdAndTenantId(input.getProductId(), input.getTenantId())
+                    .orElseThrow(() -> new ProductNotFoundException(
+                            "Product not found: productId=" + input.getProductId()
+                                    + ", tenantId=" + input.getTenantId()));
+        } else {
+            product = productRepository
+                    .findByExternalProductIdAndTenantId(input.getExternalProductId(), input.getTenantId())
+                    .orElseThrow(() -> new ProductNotFoundException(
+                            "Product not found: externalProductId=" + input.getExternalProductId()
+                                    + ", tenantId=" + input.getTenantId()));
+        }
 
         String productName = product.getName();
         String brandName = brandRepository.findById(product.getBrandId())
@@ -103,11 +113,11 @@ public class RecommendationEngine {
 
         // Step 3: Find active size chart — graceful fallback if absent (no exception).
         Optional<SizeChart> sizeChartOpt = sizeChartRepository
-                .findActiveByProductIdAndTenantId(input.getProductId(), input.getTenantId());
+                .findActiveByProductIdAndTenantId(product.getId(), input.getTenantId());
 
         if (sizeChartOpt.isEmpty()) {
             log.info("Recommendation fallback: tenantId={}, productId={} — no active size chart.",
-                    input.getTenantId(), input.getProductId());
+                    input.getTenantId(), product.getId());
             return RecommendationOutput.builder()
                     .recommendedSize(null)
                     .confidenceScore(0.0)
@@ -129,7 +139,7 @@ public class RecommendationEngine {
         persistAnalytics(input, product, gender, matchResult);
 
         log.info("Recommendation: tenantId={}, productId={}, recommendedSize={}, confidenceScore={}, quality={}",
-                input.getTenantId(), input.getProductId(),
+                input.getTenantId(), product.getId(),
                 matchResult.getRecommendedSize(), matchResult.getConfidenceScore(), matchResult.getQuality());
 
         // Step 7: Return output.
