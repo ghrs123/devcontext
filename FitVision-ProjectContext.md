@@ -753,3 +753,45 @@ Before moving to Phase 2, verify:
 - [ ] All entities are mapped correctly (spring.jpa.ddl-auto=validate passes)
 - [ ] A simple test endpoint returns the ApiResponse envelope correctly
 - [ ] GlobalExceptionHandler returns the correct format for a thrown FitVisionException
+
+---
+
+## Prompt 0 — Infraestrutura Local (pré-requisito)
+
+> Executar ANTES do Prompt 1.1. Não requer IA — são comandos directos.
+
+### OBJECTIVO
+Subir o PostgreSQL localmente via Docker para que o Spring Boot consiga ligar e o Flyway possa executar as migrations.
+
+### COMANDOS
+
+**1. Subir o container PostgreSQL:**
+```bash
+docker run --name fitvision-db \
+  -e POSTGRES_DB=fitvision \
+  -e POSTGRES_USER=fitvision \
+  -e POSTGRES_PASSWORD=fitvision \
+  -p 5432:5432 \
+  -d postgres:16
+```
+
+**2. Verificar que está a correr:**
+```bash
+docker ps
+```
+Deves ver `fitvision-db` com status `Up`.
+
+**3. Para parar e retomar nas próximas sessões:**
+```bash
+# Parar
+docker stop fitvision-db
+
+# Retomar (não precisas de criar novamente)
+docker start fitvision-db
+```
+
+### CHECKLIST
+- [ ] `docker ps` mostra `fitvision-db` com status `Up`
+- [ ] Porta 5432 disponível (não tens outro PostgreSQL a correr)
+- [ ] Só depois disto arrancar o Spring Boot
+
