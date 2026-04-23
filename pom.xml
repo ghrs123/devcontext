@@ -94,6 +94,20 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- CSV parsing -->
+        <dependency>
+            <groupId>com.opencsv</groupId>
+            <artifactId>opencsv</artifactId>
+            <version>5.9</version>
+        </dependency>
+
+        <!-- Excel parsing (Apache POI — .xlsx) -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
+        </dependency>
+
         <!-- Testcontainers (version managed by Spring Boot BOM) -->
         <dependency>
             <groupId>org.testcontainers</groupId>

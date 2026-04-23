@@ -1250,3 +1250,290 @@ Before moving to Phase 4, verify:
 - [ ] TenantContext is always cleared after request (no ThreadLocal leak)
 - [ ] All integration tests pass (mvn verify)
 - [ ] manual-test.sh runs successfully against local instance
+# FitVision — Phase 4 Prompts: Size Chart Management
+
+> Pre-condition: Phase 3 complete. Widget API is working and tested. API key authentication, TenantContext, SecurityConfig, and CORS are all configured. 36 tests passing.
+
+---
+
+## Prompt 4.1 — File Parsing Infrastructure (CSV + Excel)
+
+### CONTEXT
+FitVision backend. Stores upload size charts as CSV or Excel files. The parsed result must produce a list of SizeEntryData records (not JPA entities yet — just parsed data). Parsing is decoupled from persistence.
+
+Add to pom.xml (if not already present):
+- com.opencsv:opencsv:5.9
+- org.apache.poi:poi-ooxml:5.2.5
+
+The expected file format (both CSV and Excel) has these columns in order:
+size_label, chest_min, chest_max, waist_min, waist_max, hip_min, hip_max, height_min, height_max
+
+Rules:
+- First row is always a header — skip it
+- size_label is required — skip rows where it is blank
+- All measurement columns are optional — blank cells become null
+- size_label must be trimmed and uppercased
+- Measurement values must be parseable as decimal numbers — if not parseable, skip the row and log a warning with the row number
+
+### OBJECTIVE
+Create the file parsing infrastructure.
+
+**SizeEntryData** (record, immutable)
+- Package: com.fitvision.domain.sizechart
+- Fields: String sizeLabel, Double chestMin, Double chestMax, Double waistMin, Double waistMax, Double hipMin, Double hipMax, Double heightMin, Double heightMax
+
+**ParseResult** (value object)
+- Package: com.fitvision.domain.sizechart
+- Fields: List<SizeEntryData> entries, List<String> warnings, int skippedRows, boolean success
+- Static factory: success(List<SizeEntryData> entries, List<String> warnings, int skippedRows)
+- Static factory: failure(String reason)
+
+**SizeChartFileParser** (interface)
+- Package: com.fitvision.domain.sizechart
+- Single method: ParseResult parse(InputStream inputStream)
+
+**CsvSizeChartParser** (@Component, implements SizeChartFileParser)
+- Package: com.fitvision.infrastructure.parsing
+- Uses OpenCSV
+- Handles UTF-8 and UTF-8-BOM encodings
+- Max 500 rows — reject files larger than this with failure ParseResult
+
+**ExcelSizeChartParser** (@Component, implements SizeChartFileParser)
+- Package: com.fitvision.infrastructure.parsing
+- Uses Apache POI (poi-ooxml) — supports .xlsx only, reject .xls
+- Reads first sheet only
+- Max 500 rows — same limit as CSV
+
+**SizeChartParserFactory** (@Component)
+- Package: com.fitvision.infrastructure.parsing
+- Method: SizeChartFileParser getParser(String contentType, String filename)
+- Detects CSV vs Excel by content type and filename extension
+- Throws UnsupportedFileFormatException (new, extends FitVisionException) for unsupported types
+- Add UNSUPPORTED_FILE_FORMAT to ErrorCode enum
+
+### CONSTRAINTS
+- Parsers must never throw unchecked exceptions on bad data — always return ParseResult.failure() or skip the row
+- InputStream must be closed by the caller, not the parser
+- No Spring annotations on SizeChartFileParser interface or SizeEntryData
+- Log skipped rows at WARN with row number and reason
+
+### EXPECTED OUTPUT
+- SizeEntryData.java (record)
+- ParseResult.java
+- SizeChartFileParser.java (interface)
+- CsvSizeChartParser.java
+- ExcelSizeChartParser.java
+- SizeChartParserFactory.java
+- UnsupportedFileFormatException.java
+- Updated ErrorCode enum (UNSUPPORTED_FILE_FORMAT added)
+- Updated pom.xml (opencsv + poi-ooxml added if missing)
+
+### NEXT STEP
+Prompt 4.2 will create the SizeChartService that takes ParseResult and persists it as a versioned SizeChart with SizeEntry records.
+
+---
+
+## Prompt 4.2 — SizeChartService (Persistence + Versioning)
+
+### CONTEXT
+FitVision backend. File parsing is complete. ParseResult contains List<SizeEntryData> ready to persist.
+
+Existing JPA entities and repositories:
+- SizeChart: id, productId, version (Integer), source, active (boolean), createdAt
+- SizeEntry: id, sizeChartId, sizeLabel, chestMin/Max, waistMin/Max, hipMin/Max, heightMin/Max
+- SizeChartRepository: findActiveByProductIdAndTenantId(UUID productId, UUID tenantId)
+- SizeEntryRepository: findAllBySizeChartId(UUID sizeChartId)
+- ProductRepository: findByIdAndTenantId(UUID id, UUID tenantId)
+
+Versioning rule: each upload creates a new SizeChart version. The new version is set to active=true and all previous versions for the same product are set to active=false. Only one version can be active per product at a time.
+
+### OBJECTIVE
+Create the SizeChartService that persists parsed size chart data.
+
+**SizeChartUploadResult** (value object)
+- Package: com.fitvision.domain.sizechart
+- Fields: UUID sizeChartId, int version, int entriesSaved, List<String> warnings, boolean success
+
+**SizeChartService** (@Service)
+- Package: com.fitvision.domain.sizechart
+- Method: SizeChartUploadResult uploadFromFile(UUID tenantId, UUID productId, ParseResult parseResult, String source)
+- Method: SizeChartUploadResult uploadManual(UUID tenantId, UUID productId, List<SizeEntryData> entries)
+- Method: Optional<SizeChart> getActiveSizeChart(UUID tenantId, UUID productId)
+- Method: List<SizeEntryData> getActiveSizeChartEntries(UUID tenantId, UUID productId)
+
+**uploadFromFile flow:**
+1. Validate ParseResult.success — if false, throw SizeChartParseException (new)
+2. Validate ParseResult.entries not empty — if empty, throw SizeChartParseException
+3. Find product by productId + tenantId — throw ProductNotFoundException if not found
+4. Deactivate all existing active SizeCharts for this product (set active=false)
+5. Compute next version number (max existing version + 1, or 1 if none)
+6. Create new SizeChart with active=true, source=source
+7. Save all SizeEntryData as SizeEntry entities
+8. Return SizeChartUploadResult with counts and warnings from ParseResult
+
+**uploadManual flow:**
+- Same as uploadFromFile but source is always "manual"
+- Validates entries list is not empty
+
+### CONSTRAINTS
+- Steps 4 through 7 must be in a single @Transactional method — all or nothing
+- Add SIZE_CHART_PARSE_ERROR to ErrorCode enum
+- Add SizeChartParseException (new, extends FitVisionException)
+- Deactivation query: use a @Modifying @Query in SizeChartRepository to bulk-update active=false for all versions of a product
+- Log at INFO: tenantId, productId, new version number, entries saved count
+
+### EXPECTED OUTPUT
+- SizeChartUploadResult.java
+- SizeChartService.java
+- SizeChartParseException.java
+- Updated SizeChartRepository.java (@Modifying deactivation query added)
+- Updated ErrorCode enum
+
+### NEXT STEP
+Prompt 4.3 will create the dashboard API endpoints for size chart management (upload, manual entry, view active chart).
+
+---
+
+## Prompt 4.3 — Size Chart Dashboard Endpoints
+
+### CONTEXT
+FitVision backend. SizeChartService and file parsers are complete. SecurityConfig currently permits all /api/dashboard/** requests (JWT not implemented yet — Phase 5). For now, dashboard endpoints are temporarily protected by the same API key mechanism used by the widget, using the store's secret key (X-FitVision-Secret header) instead of the public key.
+
+Add a second filter: SecretKeyAuthFilter (same pattern as ApiKeyAuthFilter) that:
+- Triggers on /api/dashboard/**
+- Reads X-FitVision-Secret header
+- Looks up store by apiKeySecret via StoreRepository (add findByApiKeySecret method)
+- Sets TenantContext on success
+
+### OBJECTIVE
+Create the size chart management endpoints.
+
+**SizeChartController** (@RestController)
+- Package: com.fitvision.api.dashboard
+- Base path: /api/dashboard/v1/size-charts
+
+**Endpoints:**
+
+POST /api/dashboard/v1/size-charts/{productId}/upload
+- Consumes: multipart/form-data
+- File field name: file
+- Detects format via SizeChartParserFactory
+- Parses via appropriate parser
+- Calls SizeChartService.uploadFromFile()
+- Returns ApiResponse<SizeChartUploadResult>
+- Max file size: 2MB (configure in application.yml)
+
+POST /api/dashboard/v1/size-charts/{productId}/manual
+- Consumes: application/json
+- Body: List<SizeEntryData>
+- Validates list not empty (@NotEmpty)
+- Calls SizeChartService.uploadManual()
+- Returns ApiResponse<SizeChartUploadResult>
+
+GET /api/dashboard/v1/size-charts/{productId}/active
+- Returns the active size chart entries for a product
+- Returns ApiResponse<List<SizeEntryData>>
+- Returns empty list (not 404) if no active chart exists
+
+DELETE /api/dashboard/v1/size-charts/{productId}/active
+- Deactivates the current active size chart (sets active=false)
+- Does not delete data — soft deactivation only
+- Returns ApiResponse<Void> with HTTP 204
+
+**application.yml additions:**
+```yaml
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
+```
+
+### CONSTRAINTS
+- productId in path must belong to the authenticated tenant — validate via ProductRepository
+- SecretKeyAuthFilter follows exact same pattern as ApiKeyAuthFilter
+- Add findByApiKeySecret to StoreRepository
+- File upload endpoint must handle MultipartException gracefully (file too large → 400, not 500)
+- Add INVALID_SECRET_KEY to ErrorCode enum
+
+### EXPECTED OUTPUT
+- SecretKeyAuthFilter.java
+- SizeChartController.java
+- Updated StoreRepository.java (findByApiKeySecret added)
+- Updated SecurityConfig.java (SecretKeyAuthFilter added for /api/dashboard/**)
+- Updated application.yml (multipart limits)
+- Updated ErrorCode enum
+
+### NEXT STEP
+Prompt 4.4 will create unit tests for the parsers and integration tests for the size chart endpoints.
+
+---
+
+## Prompt 4.4 — Tests for Size Chart Management
+
+### CONTEXT
+FitVision backend. File parsers, SizeChartService, and dashboard endpoints are complete. AbstractIntegrationTest exists with Testcontainers PostgreSQL setup. 36 tests currently passing.
+
+### OBJECTIVE
+Create unit tests for parsers and integration tests for the size chart endpoints.
+
+**CsvSizeChartParserTest** (unit test)
+Test cases:
+- Valid CSV with all columns → ParseResult.success, correct entry count
+- CSV with blank size_label rows → rows skipped, skippedRows count correct
+- CSV with non-numeric measurement → row skipped with warning
+- CSV with only header row → success with empty entries list
+- CSV exceeding 500 rows → ParseResult.failure
+- UTF-8-BOM encoded CSV → parsed correctly
+
+**ExcelSizeChartParserTest** (unit test)
+Test cases:
+- Valid .xlsx with all columns → ParseResult.success
+- .xlsx with blank rows → skipped correctly
+- Empty sheet (header only) → success with empty entries
+- Rows exceeding 500 → ParseResult.failure
+
+Use small in-memory test files built programmatically (Apache POI for Excel, plain strings for CSV).
+
+**SizeChartServiceTest** (unit test with Mockito)
+Test cases:
+- uploadFromFile: happy path → new version created, previous deactivated, entries saved
+- uploadFromFile: ParseResult.failure → throws SizeChartParseException
+- uploadFromFile: product not found → throws ProductNotFoundException
+- uploadManual: empty entries → throws SizeChartParseException
+- getActiveSizeChart: no active chart → returns Optional.empty()
+
+**SizeChartControllerIT** (integration test, extends AbstractIntegrationTest)
+Test cases:
+- POST /upload with valid CSV → 200, version=1, entriesSaved > 0
+- POST /upload with second CSV → 200, version=2, previous version deactivated
+- POST /upload with invalid secret key → 401
+- POST /upload with file too large → 400
+- POST /manual with valid entries → 200
+- GET /active → 200, returns entries matching last upload
+- DELETE /active → 204, subsequent GET /active returns empty list
+- GET /active for product belonging to different tenant → 404
+
+### CONSTRAINTS
+- Build test CSV content as String in test code — no test resource files needed for CSV
+- Build test Excel files programmatically with Apache POI in a TestDataBuilder utility class
+- All integration tests must clean up after themselves
+
+### EXPECTED OUTPUT
+- CsvSizeChartParserTest.java
+- ExcelSizeChartParserTest.java
+- SizeChartServiceTest.java
+- SizeChartControllerIT.java
+- TestDataBuilder.java (test utility for building test fixtures)
+
+### PHASE 4 COMPLETION CHECKLIST
+Before moving to Phase 5, verify:
+- [ ] All tests pass (mvn verify)
+- [ ] CSV upload creates a new versioned SizeChart and deactivates previous
+- [ ] Excel upload works identically to CSV
+- [ ] Manual entry endpoint accepts JSON list of SizeEntryData
+- [ ] File size limit enforced (2MB)
+- [ ] GET /active returns the correct active entries
+- [ ] DELETE /active soft-deactivates without deleting data
+- [ ] Tenant isolation: a store cannot access another store's products
+- [ ] After upload, a widget recommendation request returns a valid size recommendation
