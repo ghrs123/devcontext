@@ -10,5 +10,7 @@ public interface StoreRepository extends JpaRepository<Store, UUID> {
 
     Optional<Store> findByApiKeyPublic(String apiKeyPublic);
 
+    Optional<Store> findByApiKeySecret(String apiKeySecret);
+
     Optional<Store> findByEmail(String email);
 }

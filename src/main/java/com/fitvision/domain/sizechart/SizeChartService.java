@@ -110,6 +110,39 @@ public class SizeChartService {
                 .orElse(Collections.emptyList());
     }
 
+    /**
+     * Validates that the product belongs to the tenant, then soft-deactivates the active size chart.
+     * If no active chart exists, this is a no-op (idempotent).
+     *
+     * @throws ProductNotFoundException if the product does not belong to this tenant
+     */
+    @Transactional
+    public void deactivateActiveSizeChart(UUID tenantId, UUID productId) {
+        productRepository.findByIdAndTenantId(productId, tenantId)
+                .orElseThrow(() -> new ProductNotFoundException(
+                        "Product " + productId + " not found for tenant " + tenantId));
+
+        sizeChartRepository.findActiveByProductIdAndTenantId(productId, tenantId)
+                .ifPresent(chart -> {
+                    chart.setActive(false);
+                    sizeChartRepository.save(chart);
+                    log.info("SizeChart deactivated: tenantId={} productId={} chartId={}",
+                            tenantId, productId, chart.getId());
+                });
+    }
+
+    /**
+     * Validates that the product belongs to the tenant, then returns the active chart.
+     *
+     * @throws ProductNotFoundException if the product does not belong to this tenant
+     */
+    public Optional<SizeChart> getActiveSizeChartForTenant(UUID tenantId, UUID productId) {
+        productRepository.findByIdAndTenantId(productId, tenantId)
+                .orElseThrow(() -> new ProductNotFoundException(
+                        "Product " + productId + " not found for tenant " + tenantId));
+        return sizeChartRepository.findActiveByProductIdAndTenantId(productId, tenantId);
+    }
+
     // -----------------------------------------------------------------------
     // Internal — transactional persistence
     // -----------------------------------------------------------------------

@@ -40,9 +40,12 @@ import java.util.List;
 public class SecurityConfig {
 
     private final ApiKeyAuthFilter apiKeyAuthFilter;
+    private final SecretKeyAuthFilter secretKeyAuthFilter;
 
-    public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter) {
+    public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter,
+                          SecretKeyAuthFilter secretKeyAuthFilter) {
         this.apiKeyAuthFilter = apiKeyAuthFilter;
+        this.secretKeyAuthFilter = secretKeyAuthFilter;
     }
 
     @Bean
@@ -54,34 +57,36 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers("/api/dashboard/**").permitAll()
+                        .requestMatchers("/api/dashboard/**").authenticated()
                         .requestMatchers("/api/widget/**").authenticated()
                         .anyRequest().permitAll()
                 )
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
+                            String path = request.getRequestURI();
+                            ErrorCode code = path.startsWith("/api/dashboard/")
+                                    ? ErrorCode.INVALID_SECRET_KEY
+                                    : ErrorCode.INVALID_API_KEY;
+                            String message = path.startsWith("/api/dashboard/")
+                                    ? "Missing or invalid secret key. Provide a valid X-FitVision-Secret header."
+                                    : "Missing or invalid API key. Provide a valid X-FitVision-Key header.";
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            ApiResponse<Void> body = ApiResponse.error(
-                                    ErrorCode.INVALID_API_KEY,
-                                    "Missing or invalid API key. Provide a valid X-FitVision-Key header.");
+                            ApiResponse<Void> body = ApiResponse.error(code, message);
                             ObjectMapper mapper = new ObjectMapper();
                             mapper.registerModule(new JavaTimeModule());
                             mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
                             response.getWriter().write(mapper.writeValueAsString(body));
                         })
                 )
-                .addFilterBefore(apiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(apiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(secretKeyAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
     /**
-     * CORS configuration for the widget API surface.
-     *
-     * <p>The widget runs on third-party store domains, so {@code /api/widget/**} must allow
-     * cross-origin requests from any origin. Dashboard endpoints use the same config for
-     * simplicity — they will be tightened in Phase 5 when JWT auth is introduced.
+     * CORS configuration for widget and dashboard API surfaces.
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
@@ -91,8 +96,15 @@ public class SecurityConfig {
         widgetCors.setAllowedHeaders(List.of("X-FitVision-Key", "Content-Type"));
         widgetCors.setMaxAge(3600L);
 
+        CorsConfiguration dashboardCors = new CorsConfiguration();
+        dashboardCors.setAllowedOriginPatterns(List.of("*"));
+        dashboardCors.setAllowedMethods(List.of("GET", "POST", "DELETE", "OPTIONS"));
+        dashboardCors.setAllowedHeaders(List.of("X-FitVision-Secret", "Content-Type"));
+        dashboardCors.setMaxAge(3600L);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/widget/**", widgetCors);
+        source.registerCorsConfiguration("/api/dashboard/**", dashboardCors);
         return source;
     }
 }
