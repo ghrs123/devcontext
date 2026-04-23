@@ -753,3 +753,787 @@ Before moving to Phase 2, verify:
 - [ ] All entities are mapped correctly (spring.jpa.ddl-auto=validate passes)
 - [ ] A simple test endpoint returns the ApiResponse envelope correctly
 - [ ] GlobalExceptionHandler returns the correct format for a thrown FitVisionException
+
+---
+
+## Prompt 0 — Infraestrutura Local (pré-requisito)
+
+> Executar ANTES do Prompt 1.1. Não requer IA — são comandos directos.
+
+### OBJECTIVO
+Subir o PostgreSQL localmente via Docker para que o Spring Boot consiga ligar e o Flyway possa executar as migrations.
+
+### COMANDOS
+
+**1. Subir o container PostgreSQL:**
+```bash
+docker run --name fitvision-db \
+  -e POSTGRES_DB=fitvision \
+  -e POSTGRES_USER=fitvision \
+  -e POSTGRES_PASSWORD=fitvision \
+  -p 5432:5432 \
+  -d postgres:16
+```
+
+**2. Verificar que está a correr:**
+```bash
+docker ps
+```
+Deves ver `fitvision-db` com status `Up`.
+
+**3. Para parar e retomar nas próximas sessões:**
+```bash
+# Parar
+docker stop fitvision-db
+
+# Retomar (não precisas de criar novamente)
+docker start fitvision-db
+```
+
+### CHECKLIST
+- [ ] `docker ps` mostra `fitvision-db` com status `Up`
+- [ ] Porta 5432 disponível (não tens outro PostgreSQL a correr)
+- [ ] Só depois disto arrancar o Spring Boot
+
+# FitVision — Phase 2 Prompts: Recommendation Engine
+
+> Pre-condition: Phase 1 complete. Application starts, Flyway migrations run, all entities and repositories exist, ApiResponse envelope and GlobalExceptionHandler are working.
+
+---
+
+## Prompt 2.1 — BodyProfile Value Object
+
+### CONTEXT
+FitVision backend. Spring Boot 3.x, Java 21. Phase 1 is complete.
+
+We are building the recommendation engine. The first step is a value object that represents the computed body profile of a buyer. This is derived from user input (height, weight, gender, age) and is never persisted directly — it is computed on the fly for each recommendation request.
+
+The domain model for the computation is defined as follows:
+
+**Input:** height_cm (double), weight_kg (double), gender (enum: MALE / FEMALE / UNISEX), age (Integer, nullable)
+
+**Computed fields:**
+- bmi = weight_kg / (height_cm / 100)²
+- body_fat_pct → Deurenberg formula: (1.20 × bmi) + (0.23 × age) - (10.8 × gender_factor) - 5.4
+  - gender_factor: MALE = 1.0, FEMALE = 0.0, UNISEX = 0.5
+  - if age is null, use 30 as default
+- estimated_chest_cm: lean_mass_kg = weight_kg × (1 - body_fat_pct / 100), then chest = 85 + (lean_mass_kg × 0.4) + (bmi × 0.5)
+- estimated_waist_cm: (weight_kg × 0.74) + (height_cm × 0.18) - 28
+- estimated_hip_cm: chest_cm × 1.05, adjusted by gender (FEMALE × 1.08, MALE × 1.0, UNISEX × 1.04)
+
+### OBJECTIVE
+Create the BodyProfile value object and the BodyProfileCalculator service.
+
+**BodyProfile** (immutable value object, not a JPA entity)
+- Package: com.fitvision.engine.recommendation
+- All fields final
+- No setters
+- Include a confidence indicator: if bmi < 15 or bmi > 45, mark as OUT_OF_RANGE
+- Include toString() for logging (must not expose raw measurements at INFO level — return only BMI and body type)
+
+**Gender enum**
+- Package: com.fitvision.domain.recommendation
+- Values: MALE, FEMALE, UNISEX
+- Field: double genderFactor
+
+**BodyProfileCalculator** (@Service, stateless)
+- Package: com.fitvision.engine.recommendation
+- Single public method: BodyProfile calculate(double heightCm, double weightKg, Gender gender, Integer age)
+- Validate inputs before computing: height must be between 50 and 250 cm, weight between 20 and 300 kg
+- Throw InvalidBodyMeasurementException (already exists from Phase 1) with a clear message if validation fails
+- Each formula step must be a private method with a descriptive name
+- Add unit-level JavaDoc explaining each formula and its source
+
+### CONSTRAINTS
+- BodyProfile is a value object — no JPA annotations, no Spring annotations
+- BodyProfileCalculator is a Spring @Service
+- All formula constants must be named constants, not magic numbers
+- Use double for all calculations — no BigDecimal at this stage
+- Round all output measurements to 1 decimal place
+
+### EXPECTED OUTPUT
+- Gender.java (enum)
+- BodyProfile.java (value object)
+- BodyProfileCalculator.java (@Service)
+
+### NEXT STEP
+Prompt 2.2 will create the SizeChartMatcher that takes a BodyProfile and a list of SizeEntry and returns the best matching size with a confidence score.
+
+---
+
+## Prompt 2.2 — SizeChartMatcher
+
+### CONTEXT
+FitVision backend. BodyProfile value object and BodyProfileCalculator are complete. Gender enum exists at com.fitvision.domain.recommendation.Gender.
+
+SizeEntry entity exists at com.fitvision.domain.sizechart.SizeEntry with fields:
+- sizeLabel (String)
+- chestMin, chestMax (Double, nullable)
+- waistMin, waistMax (Double, nullable)
+- hipMin, hipMax (Double, nullable)
+- heightMin, heightMax (Double, nullable)
+
+### OBJECTIVE
+Create the SizeChartMatcher service that receives a BodyProfile and a list of SizeEntry and returns a MatchResult.
+
+**MatchResult** (value object)
+- Package: com.fitvision.engine.recommendation
+- Fields: String recommendedSize, double confidenceScore (0.0 to 1.0), MatchQuality quality (enum: EXACT / PARTIAL / CLOSEST / NO_MATCH)
+- Static factory methods: exact(String size), partial(String size, double score), closest(String size), noMatch()
+
+**Matching algorithm:**
+1. For each SizeEntry, compute how many measurement dimensions match the BodyProfile:
+   - chest matches if BodyProfile.estimatedChestCm is within [chestMin, chestMax] (skip if both are null)
+   - waist matches if BodyProfile.estimatedWaistCm is within [waistMin, waistMax] (skip if both are null)
+   - hip matches if BodyProfile.estimatedHipCm is within [hipMin, hipMax] (skip if both are null)
+   - height matches if BodyProfile.heightCm is within [heightMin, heightMax] (skip if both are null)
+2. Count matched dimensions vs total available dimensions
+3. Confidence score = matched / total available
+4. Quality:
+   - EXACT: all available dimensions match (score = 1.0)
+   - PARTIAL: at least half match (score >= 0.5)
+   - CLOSEST: best available match (score < 0.5)
+   - NO_MATCH: empty size chart
+5. If multiple entries have the same score, prefer the one where waist matches (most reliable predictor)
+6. If BodyProfile is OUT_OF_RANGE, cap confidence score at 0.5 regardless of matches
+
+**SizeChartMatcher** (@Service, stateless)
+- Package: com.fitvision.engine.recommendation
+- Single public method: MatchResult match(BodyProfile profile, List<SizeEntry> entries)
+- Return MatchResult.noMatch() if entries is empty or null
+
+### CONSTRAINTS
+- Pure computation — no database access, no external calls
+- All logic must be unit testable in isolation
+- Null-safe for all SizeEntry measurement fields
+
+### EXPECTED OUTPUT
+- MatchResult.java (value object + MatchQuality enum)
+- SizeChartMatcher.java (@Service)
+
+### NEXT STEP
+Prompt 2.3 will create the RecommendationEngine that orchestrates BodyProfileCalculator + SizeChartMatcher and produces the final recommendation.
+
+---
+
+## Prompt 2.3 — RecommendationEngine (Orchestrator)
+
+### CONTEXT
+FitVision backend. All components exist:
+- BodyProfileCalculator (@Service) — computes BodyProfile from height, weight, gender, age
+- SizeChartMatcher (@Service) — matches BodyProfile against List<SizeEntry>, returns MatchResult
+- SizeChartRepository — findActiveByProductIdAndTenantId(UUID productId, UUID tenantId)
+- SizeEntryRepository — findAllBySizeChartId(UUID sizeChartId)
+- ProductRepository — findByIdAndTenantId(UUID id, UUID tenantId)
+- RecommendationRequestRepository — save()
+- GlobalExceptionHandler handles FitVisionException subclasses
+- ErrorCode enum has: PRODUCT_NOT_FOUND, SIZE_CHART_NOT_FOUND
+
+### OBJECTIVE
+Create the RecommendationEngine service that orchestrates the full recommendation flow.
+
+**RecommendationRequest DTO** (input, not the JPA entity)
+- Package: com.fitvision.engine.recommendation
+- Name: RecommendationInput
+- Fields: UUID tenantId, UUID productId (or String externalProductId), double heightCm, double weightKg, Gender gender (nullable), Integer age (nullable), boolean storeBodyData
+
+**RecommendationOutput DTO**
+- Package: com.fitvision.engine.recommendation
+- Fields: String recommendedSize, double confidenceScore, MatchQuality quality, String productName, String brandName, boolean hasSizeChart, String fallbackUrl (nullable — used when hasSizeChart = false)
+
+**RecommendationEngine** (@Service)
+- Package: com.fitvision.engine.recommendation
+- Method: RecommendationOutput recommend(RecommendationInput input)
+
+**Flow:**
+1. Validate input (height, weight ranges) — delegate to BodyProfileCalculator which throws InvalidBodyMeasurementException
+2. Find product by productId + tenantId — throw ProductNotFoundException if not found
+3. Find active size chart for product + tenant — if not found, return graceful fallback (hasSizeChart=false, no exception)
+4. Load all SizeEntry for the size chart
+5. Compute BodyProfile via BodyProfileCalculator
+6. Get MatchResult via SizeChartMatcher
+7. Persist RecommendationRequest entity (the JPA one) with all data + confidenceScore + storeBodyData flag
+8. Return RecommendationOutput
+
+**Fallback behaviour (no size chart):**
+- Return RecommendationOutput with hasSizeChart=false
+- recommendedSize = null
+- confidenceScore = 0.0
+- quality = NO_MATCH
+- fallbackUrl = null (will be populated in a future phase)
+
+### CONSTRAINTS
+- Gender defaults to UNISEX if null in input
+- Age defaults to 30 if null (handled inside BodyProfileCalculator already)
+- Log at INFO: tenantId, productId, recommendedSize, confidenceScore, quality
+- Log at DEBUG: full BodyProfile details
+- Never log raw height/weight at INFO level
+- Transaction: the persist step (step 7) must be @Transactional
+
+### EXPECTED OUTPUT
+- RecommendationInput.java (DTO)
+- RecommendationOutput.java (DTO)
+- RecommendationEngine.java (@Service)
+
+### NEXT STEP
+Prompt 2.4 will create comprehensive unit tests for BodyProfileCalculator, SizeChartMatcher, and RecommendationEngine.
+
+---
+
+## Prompt 2.4 — Unit Tests for the Engine
+
+### CONTEXT
+FitVision backend. All engine components are complete:
+- BodyProfileCalculator — computes BMI, body fat, chest, waist, hip estimates
+- SizeChartMatcher — matches BodyProfile to SizeEntry list, returns MatchResult
+- RecommendationEngine — orchestrates the full flow, uses repositories
+
+Testing stack: JUnit 5, Mockito (via spring-boot-starter-test).
+
+### OBJECTIVE
+Create comprehensive unit tests for all three engine components.
+
+**BodyProfileCalculatorTest**
+
+Test cases to cover:
+- Average male (175cm, 75kg) → assert BMI ~24.5, chest/waist/hip within expected range
+- Average female (165cm, 60kg) → assert gender factor applied correctly
+- Minimum valid input (50cm, 20kg) → should not throw
+- Maximum valid input (250cm, 300kg) → should not throw
+- Below minimum height (49cm) → throws InvalidBodyMeasurementException
+- Below minimum weight (19kg) → throws InvalidBodyMeasurementException
+- Null age → uses default 30, does not throw
+- UNISEX gender → gender factor = 0.5
+
+**SizeChartMatcherTest**
+
+Test cases to cover:
+- Empty entry list → returns NO_MATCH
+- Null entry list → returns NO_MATCH
+- Single entry, all dimensions match → EXACT, score = 1.0
+- Single entry, 2 of 3 dimensions match → PARTIAL, score = 0.67
+- Single entry, no dimensions match → CLOSEST (only option available)
+- Multiple entries, pick best match
+- Multiple entries with same score → prefer waist match
+- OUT_OF_RANGE BodyProfile → confidence capped at 0.5
+- Entry with all null measurements → skipped (treat as 0 available dimensions)
+
+**RecommendationEngineTest** (use Mockito to mock repositories)
+
+Test cases to cover:
+- Happy path: product found, size chart found, entries exist → returns RecommendationOutput with size
+- Product not found → throws ProductNotFoundException
+- No active size chart → returns fallback output (hasSizeChart=false, no exception)
+- Empty size chart (no entries) → returns NO_MATCH output
+- storeBodyData=false → RecommendationRequest persisted with bodyMeasurementsStored=false
+- storeBodyData=true → RecommendationRequest persisted with bodyMeasurementsStored=true
+
+### CONSTRAINTS
+- No Spring context in unit tests — plain JUnit 5 + Mockito only
+- Each test method name must describe the scenario: given_averageMale_when_calculate_then_bmiIsCorrect
+- Use @BeforeEach to set up common fixtures
+- Assert specific values for formula outputs with delta tolerance of 0.5
+
+### EXPECTED OUTPUT
+- BodyProfileCalculatorTest.java
+- SizeChartMatcherTest.java
+- RecommendationEngineTest.java
+
+### PHASE 2 COMPLETION CHECKLIST
+Before moving to Phase 3, verify:
+- [ ] All unit tests pass (mvn test)
+- [ ] BodyProfileCalculator throws InvalidBodyMeasurementException for out-of-range inputs
+- [ ] SizeChartMatcher returns NO_MATCH for empty/null entry list
+- [ ] RecommendationEngine returns graceful fallback when no size chart exists
+- [ ] RecommendationRequest is persisted after every successful recommendation
+- [ ] No raw body measurements logged at INFO level
+# FitVision — Phase 3 Prompts: Widget API
+
+> Pre-condition: Phase 2 complete. RecommendationEngine is working and tested. BodyProfileCalculator, SizeChartMatcher, all repositories, ApiResponse envelope, and GlobalExceptionHandler exist.
+
+---
+
+## Prompt 3.1 — API Key Authentication Filter
+
+### CONTEXT
+FitVision backend. Spring Boot 3.x, Spring Security 6.x. The system has two API surfaces:
+- Widget API (public — authenticated via store's public API key in header X-FitVision-Key)
+- Dashboard API (authenticated via JWT — implemented in a future phase)
+
+StoreRepository exists with method: findByApiKeyPublic(String apiKeyPublic): Optional<Store>
+
+Store entity has fields: id (UUID), apiKeyPublic, status (String).
+
+Spring Security is on the classpath. No SecurityFilterChain has been configured yet.
+
+### OBJECTIVE
+Create the API key authentication filter and Spring Security configuration for the widget API.
+
+**ApiKeyAuthFilter** (extends OncePerRequestFilter)
+- Package: com.fitvision.infrastructure.security
+- Reads header X-FitVision-Key from every request to /api/widget/**
+- Looks up the store by apiKeyPublic via StoreRepository
+- If found and store status is ACTIVE: sets Authentication in SecurityContextHolder with the Store as principal
+- If not found or store not ACTIVE: does NOT throw — lets the request continue (SecurityConfig will block it)
+- Must not trigger on /api/dashboard/** or /actuator/**
+
+**TenantContext** (ThreadLocal holder)
+- Package: com.fitvision.infrastructure.security
+- Static methods: set(UUID tenantId), get(): UUID, clear()
+- ApiKeyAuthFilter sets TenantContext after successful auth
+- Must be cleared after request completes (use finally block)
+
+**SecurityConfig** (@Configuration @EnableWebSecurity)
+- Package: com.fitvision.infrastructure.security
+- Widget endpoints /api/widget/**: require authentication (API key filter applied)
+- Actuator /actuator/health: permit all
+- Dashboard /api/dashboard/**: permit all for now (JWT filter added in Phase 5)
+- Disable CSRF (stateless API)
+- Disable session management (stateless)
+- Add ApiKeyAuthFilter before UsernamePasswordAuthenticationFilter
+
+**InvalidApiKeyException** — already exists from Phase 1. Use it in the filter when key is missing entirely (header absent).
+
+### CONSTRAINTS
+- TenantContext must always be cleared — memory leak risk if not cleared after request
+- StoreRepository call inside a filter requires @Transactional handling — inject StoreRepository directly, Spring handles the transaction
+- Log at DEBUG: API key lookup result (never log the key value itself)
+- Log at WARN: rejected request with reason (missing key / inactive store)
+
+### EXPECTED OUTPUT
+- TenantContext.java
+- ApiKeyAuthFilter.java
+- SecurityConfig.java
+
+### NEXT STEP
+Prompt 3.2 will create the widget recommendation endpoint that uses TenantContext to scope the recommendation to the authenticated store.
+
+---
+
+## Prompt 3.2 — Widget Recommendation Endpoint
+
+### CONTEXT
+FitVision backend. Security layer is complete:
+- ApiKeyAuthFilter sets TenantContext.set(tenantId) on every authenticated widget request
+- SecurityConfig protects /api/widget/** — only authenticated requests reach controllers
+- RecommendationEngine.recommend(RecommendationInput) is the orchestrator
+- ApiResponse<T> envelope is the standard response format
+- GlobalExceptionHandler handles all FitVisionException subclasses
+
+### OBJECTIVE
+Create the widget recommendation endpoint.
+
+**SizeRecommendationRequest** (request body DTO)
+- Package: com.fitvision.api.widget
+- Fields:
+  - externalProductId (String, @NotBlank) — the Shopify/WooCommerce product ID
+  - heightCm (double, @Min(50) @Max(250))
+  - weightKg (double, @Min(20) @Max(300))
+  - gender (String, nullable — "MALE" / "FEMALE" / "UNISEX")
+  - age (Integer, nullable, @Min(10) @Max(120))
+  - storeBodyData (boolean, default false)
+
+**SizeRecommendationResponse** (response body DTO)
+- Package: com.fitvision.api.widget
+- Fields:
+  - recommendedSize (String, nullable)
+  - confidenceScore (double)
+  - quality (String — EXACT / PARTIAL / CLOSEST / NO_MATCH)
+  - productName (String)
+  - hasSizeChart (boolean)
+  - confidenceLabel (String — computed: "High" if score >= 0.8, "Medium" if >= 0.5, "Low" if < 0.5)
+  - message (String — human-readable message for the widget to display)
+
+**WidgetRecommendationController** (@RestController)
+- Package: com.fitvision.api.widget
+- Base path: /api/widget/v1
+- Endpoint: POST /size-recommendation
+- Reads tenantId from TenantContext.get()
+- Maps SizeRecommendationRequest → RecommendationInput
+- Calls RecommendationEngine.recommend()
+- Maps RecommendationOutput → SizeRecommendationResponse
+- Returns ApiResponse<SizeRecommendationResponse>
+
+**Message logic:**
+- EXACT + High confidence: "Based on your measurements, we recommend size {size}."
+- PARTIAL: "We recommend size {size}, but please check the size guide for confirmation."
+- CLOSEST / Low confidence: "Size {size} is the closest match. We recommend measuring yourself before ordering."
+- NO_MATCH / no size chart: "We don't have size data for this product yet. Please consult the brand's size guide."
+
+**CORS configuration:**
+- Allow all origins (* ) for /api/widget/** — the widget runs on third-party store domains
+- Allowed methods: POST, OPTIONS
+- Allowed headers: X-FitVision-Key, Content-Type
+- Add to SecurityConfig (not a separate @CrossOrigin annotation)
+
+### CONSTRAINTS
+- Gender string must be parsed to Gender enum safely — if invalid value, default to UNISEX (do not throw)
+- TenantContext.get() returns the tenantId set by the filter — never trust a tenantId from the request body
+- Endpoint must respond in under 500ms under normal conditions (no heavy computation)
+- Return HTTP 200 even for NO_MATCH / no size chart — these are valid business outcomes, not errors
+
+### EXPECTED OUTPUT
+- SizeRecommendationRequest.java
+- SizeRecommendationResponse.java
+- WidgetRecommendationController.java
+- Updated SecurityConfig.java (CORS added)
+
+### NEXT STEP
+Prompt 3.3 will create an integration test for the widget endpoint and a manual test script.
+
+---
+
+## Prompt 3.3 — Widget API Integration Test + Manual Test
+
+### CONTEXT
+FitVision backend. Widget endpoint is complete: POST /api/widget/v1/size-recommendation. ApiKeyAuthFilter protects it. TenantContext holds the authenticated store's tenantId.
+
+Testing stack: JUnit 5, @SpringBootTest, MockMvc, @ActiveProfiles("test").
+
+For integration tests, we need a test PostgreSQL. Use @DataJpaTest or @SpringBootTest with an in-memory approach — but since we use Flyway + PostgreSQL-specific SQL, use Testcontainers (PostgreSQL container) for integration tests.
+
+Add to pom.xml test scope:
+- org.testcontainers:testcontainers
+- org.testcontainers:postgresql
+- org.testcontainers:junit-jupiter
+
+### OBJECTIVE
+Create an integration test for the widget recommendation endpoint and a manual cURL test script.
+
+**AbstractIntegrationTest** (base class)
+- Package: com.fitvision (test directory)
+- Starts a PostgreSQL Testcontainer
+- Runs Flyway migrations on the container
+- Shared across all future integration tests
+- Annotated with @SpringBootTest(webEnvironment = RANDOM_PORT), @ActiveProfiles("test"), @Testcontainers
+
+**WidgetRecommendationControllerIT**
+- Extends AbstractIntegrationTest
+- Uses TestRestTemplate or MockMvc
+
+Test scenarios:
+1. Missing API key header → HTTP 401, error code INVALID_API_KEY
+2. Invalid API key → HTTP 401, error code INVALID_API_KEY
+3. Valid API key, valid product, size chart exists → HTTP 200, recommendedSize not null, confidenceScore > 0
+4. Valid API key, valid product, no size chart → HTTP 200, hasSizeChart=false, recommendedSize null
+5. Valid API key, product not found → HTTP 404, error code PRODUCT_NOT_FOUND
+6. Valid API key, invalid body (heightCm = 0) → HTTP 400, error code VALIDATION_ERROR
+
+**Test data setup:**
+- @BeforeEach inserts a test Store with a known apiKeyPublic
+- Inserts a test Brand, Product, SizeChart, and SizeEntries for the happy path
+- @AfterEach cleans up
+
+**manual-test.sh** (bash script)
+- Place in project root /scripts/manual-test.sh
+- cURL commands for each scenario above
+- Uses a placeholder API_KEY variable at the top
+- Includes expected response comment for each call
+
+### CONSTRAINTS
+- Testcontainers must use a fixed PostgreSQL image version: postgres:16
+- AbstractIntegrationTest must be reusable for all future integration tests
+- Test data must be isolated — no test can depend on data from another test
+
+### EXPECTED OUTPUT
+- pom.xml (updated with Testcontainers dependencies)
+- AbstractIntegrationTest.java
+- WidgetRecommendationControllerIT.java
+- scripts/manual-test.sh
+
+### PHASE 3 COMPLETION CHECKLIST
+Before moving to Phase 4, verify:
+- [ ] POST /api/widget/v1/size-recommendation returns 401 without API key
+- [ ] POST /api/widget/v1/size-recommendation returns 200 with valid key and product
+- [ ] Response includes confidenceScore, quality, and human-readable message
+- [ ] CORS headers present on response (Access-Control-Allow-Origin: *)
+- [ ] TenantContext is always cleared after request (no ThreadLocal leak)
+- [ ] All integration tests pass (mvn verify)
+- [ ] manual-test.sh runs successfully against local instance
+# FitVision — Phase 4 Prompts: Size Chart Management
+
+> Pre-condition: Phase 3 complete. Widget API is working and tested. API key authentication, TenantContext, SecurityConfig, and CORS are all configured. 36 tests passing.
+
+---
+
+## Prompt 4.1 — File Parsing Infrastructure (CSV + Excel)
+
+### CONTEXT
+FitVision backend. Stores upload size charts as CSV or Excel files. The parsed result must produce a list of SizeEntryData records (not JPA entities yet — just parsed data). Parsing is decoupled from persistence.
+
+Add to pom.xml (if not already present):
+- com.opencsv:opencsv:5.9
+- org.apache.poi:poi-ooxml:5.2.5
+
+The expected file format (both CSV and Excel) has these columns in order:
+size_label, chest_min, chest_max, waist_min, waist_max, hip_min, hip_max, height_min, height_max
+
+Rules:
+- First row is always a header — skip it
+- size_label is required — skip rows where it is blank
+- All measurement columns are optional — blank cells become null
+- size_label must be trimmed and uppercased
+- Measurement values must be parseable as decimal numbers — if not parseable, skip the row and log a warning with the row number
+
+### OBJECTIVE
+Create the file parsing infrastructure.
+
+**SizeEntryData** (record, immutable)
+- Package: com.fitvision.domain.sizechart
+- Fields: String sizeLabel, Double chestMin, Double chestMax, Double waistMin, Double waistMax, Double hipMin, Double hipMax, Double heightMin, Double heightMax
+
+**ParseResult** (value object)
+- Package: com.fitvision.domain.sizechart
+- Fields: List<SizeEntryData> entries, List<String> warnings, int skippedRows, boolean success
+- Static factory: success(List<SizeEntryData> entries, List<String> warnings, int skippedRows)
+- Static factory: failure(String reason)
+
+**SizeChartFileParser** (interface)
+- Package: com.fitvision.domain.sizechart
+- Single method: ParseResult parse(InputStream inputStream)
+
+**CsvSizeChartParser** (@Component, implements SizeChartFileParser)
+- Package: com.fitvision.infrastructure.parsing
+- Uses OpenCSV
+- Handles UTF-8 and UTF-8-BOM encodings
+- Max 500 rows — reject files larger than this with failure ParseResult
+
+**ExcelSizeChartParser** (@Component, implements SizeChartFileParser)
+- Package: com.fitvision.infrastructure.parsing
+- Uses Apache POI (poi-ooxml) — supports .xlsx only, reject .xls
+- Reads first sheet only
+- Max 500 rows — same limit as CSV
+
+**SizeChartParserFactory** (@Component)
+- Package: com.fitvision.infrastructure.parsing
+- Method: SizeChartFileParser getParser(String contentType, String filename)
+- Detects CSV vs Excel by content type and filename extension
+- Throws UnsupportedFileFormatException (new, extends FitVisionException) for unsupported types
+- Add UNSUPPORTED_FILE_FORMAT to ErrorCode enum
+
+### CONSTRAINTS
+- Parsers must never throw unchecked exceptions on bad data — always return ParseResult.failure() or skip the row
+- InputStream must be closed by the caller, not the parser
+- No Spring annotations on SizeChartFileParser interface or SizeEntryData
+- Log skipped rows at WARN with row number and reason
+
+### EXPECTED OUTPUT
+- SizeEntryData.java (record)
+- ParseResult.java
+- SizeChartFileParser.java (interface)
+- CsvSizeChartParser.java
+- ExcelSizeChartParser.java
+- SizeChartParserFactory.java
+- UnsupportedFileFormatException.java
+- Updated ErrorCode enum (UNSUPPORTED_FILE_FORMAT added)
+- Updated pom.xml (opencsv + poi-ooxml added if missing)
+
+### NEXT STEP
+Prompt 4.2 will create the SizeChartService that takes ParseResult and persists it as a versioned SizeChart with SizeEntry records.
+
+---
+
+## Prompt 4.2 — SizeChartService (Persistence + Versioning)
+
+### CONTEXT
+FitVision backend. File parsing is complete. ParseResult contains List<SizeEntryData> ready to persist.
+
+Existing JPA entities and repositories:
+- SizeChart: id, productId, version (Integer), source, active (boolean), createdAt
+- SizeEntry: id, sizeChartId, sizeLabel, chestMin/Max, waistMin/Max, hipMin/Max, heightMin/Max
+- SizeChartRepository: findActiveByProductIdAndTenantId(UUID productId, UUID tenantId)
+- SizeEntryRepository: findAllBySizeChartId(UUID sizeChartId)
+- ProductRepository: findByIdAndTenantId(UUID id, UUID tenantId)
+
+Versioning rule: each upload creates a new SizeChart version. The new version is set to active=true and all previous versions for the same product are set to active=false. Only one version can be active per product at a time.
+
+### OBJECTIVE
+Create the SizeChartService that persists parsed size chart data.
+
+**SizeChartUploadResult** (value object)
+- Package: com.fitvision.domain.sizechart
+- Fields: UUID sizeChartId, int version, int entriesSaved, List<String> warnings, boolean success
+
+**SizeChartService** (@Service)
+- Package: com.fitvision.domain.sizechart
+- Method: SizeChartUploadResult uploadFromFile(UUID tenantId, UUID productId, ParseResult parseResult, String source)
+- Method: SizeChartUploadResult uploadManual(UUID tenantId, UUID productId, List<SizeEntryData> entries)
+- Method: Optional<SizeChart> getActiveSizeChart(UUID tenantId, UUID productId)
+- Method: List<SizeEntryData> getActiveSizeChartEntries(UUID tenantId, UUID productId)
+
+**uploadFromFile flow:**
+1. Validate ParseResult.success — if false, throw SizeChartParseException (new)
+2. Validate ParseResult.entries not empty — if empty, throw SizeChartParseException
+3. Find product by productId + tenantId — throw ProductNotFoundException if not found
+4. Deactivate all existing active SizeCharts for this product (set active=false)
+5. Compute next version number (max existing version + 1, or 1 if none)
+6. Create new SizeChart with active=true, source=source
+7. Save all SizeEntryData as SizeEntry entities
+8. Return SizeChartUploadResult with counts and warnings from ParseResult
+
+**uploadManual flow:**
+- Same as uploadFromFile but source is always "manual"
+- Validates entries list is not empty
+
+### CONSTRAINTS
+- Steps 4 through 7 must be in a single @Transactional method — all or nothing
+- Add SIZE_CHART_PARSE_ERROR to ErrorCode enum
+- Add SizeChartParseException (new, extends FitVisionException)
+- Deactivation query: use a @Modifying @Query in SizeChartRepository to bulk-update active=false for all versions of a product
+- Log at INFO: tenantId, productId, new version number, entries saved count
+
+### EXPECTED OUTPUT
+- SizeChartUploadResult.java
+- SizeChartService.java
+- SizeChartParseException.java
+- Updated SizeChartRepository.java (@Modifying deactivation query added)
+- Updated ErrorCode enum
+
+### NEXT STEP
+Prompt 4.3 will create the dashboard API endpoints for size chart management (upload, manual entry, view active chart).
+
+---
+
+## Prompt 4.3 — Size Chart Dashboard Endpoints
+
+### CONTEXT
+FitVision backend. SizeChartService and file parsers are complete. SecurityConfig currently permits all /api/dashboard/** requests (JWT not implemented yet — Phase 5). For now, dashboard endpoints are temporarily protected by the same API key mechanism used by the widget, using the store's secret key (X-FitVision-Secret header) instead of the public key.
+
+Add a second filter: SecretKeyAuthFilter (same pattern as ApiKeyAuthFilter) that:
+- Triggers on /api/dashboard/**
+- Reads X-FitVision-Secret header
+- Looks up store by apiKeySecret via StoreRepository (add findByApiKeySecret method)
+- Sets TenantContext on success
+
+### OBJECTIVE
+Create the size chart management endpoints.
+
+**SizeChartController** (@RestController)
+- Package: com.fitvision.api.dashboard
+- Base path: /api/dashboard/v1/size-charts
+
+**Endpoints:**
+
+POST /api/dashboard/v1/size-charts/{productId}/upload
+- Consumes: multipart/form-data
+- File field name: file
+- Detects format via SizeChartParserFactory
+- Parses via appropriate parser
+- Calls SizeChartService.uploadFromFile()
+- Returns ApiResponse<SizeChartUploadResult>
+- Max file size: 2MB (configure in application.yml)
+
+POST /api/dashboard/v1/size-charts/{productId}/manual
+- Consumes: application/json
+- Body: List<SizeEntryData>
+- Validates list not empty (@NotEmpty)
+- Calls SizeChartService.uploadManual()
+- Returns ApiResponse<SizeChartUploadResult>
+
+GET /api/dashboard/v1/size-charts/{productId}/active
+- Returns the active size chart entries for a product
+- Returns ApiResponse<List<SizeEntryData>>
+- Returns empty list (not 404) if no active chart exists
+
+DELETE /api/dashboard/v1/size-charts/{productId}/active
+- Deactivates the current active size chart (sets active=false)
+- Does not delete data — soft deactivation only
+- Returns ApiResponse<Void> with HTTP 204
+
+**application.yml additions:**
+```yaml
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
+```
+
+### CONSTRAINTS
+- productId in path must belong to the authenticated tenant — validate via ProductRepository
+- SecretKeyAuthFilter follows exact same pattern as ApiKeyAuthFilter
+- Add findByApiKeySecret to StoreRepository
+- File upload endpoint must handle MultipartException gracefully (file too large → 400, not 500)
+- Add INVALID_SECRET_KEY to ErrorCode enum
+
+### EXPECTED OUTPUT
+- SecretKeyAuthFilter.java
+- SizeChartController.java
+- Updated StoreRepository.java (findByApiKeySecret added)
+- Updated SecurityConfig.java (SecretKeyAuthFilter added for /api/dashboard/**)
+- Updated application.yml (multipart limits)
+- Updated ErrorCode enum
+
+### NEXT STEP
+Prompt 4.4 will create unit tests for the parsers and integration tests for the size chart endpoints.
+
+---
+
+## Prompt 4.4 — Tests for Size Chart Management
+
+### CONTEXT
+FitVision backend. File parsers, SizeChartService, and dashboard endpoints are complete. AbstractIntegrationTest exists with Testcontainers PostgreSQL setup. 36 tests currently passing.
+
+### OBJECTIVE
+Create unit tests for parsers and integration tests for the size chart endpoints.
+
+**CsvSizeChartParserTest** (unit test)
+Test cases:
+- Valid CSV with all columns → ParseResult.success, correct entry count
+- CSV with blank size_label rows → rows skipped, skippedRows count correct
+- CSV with non-numeric measurement → row skipped with warning
+- CSV with only header row → success with empty entries list
+- CSV exceeding 500 rows → ParseResult.failure
+- UTF-8-BOM encoded CSV → parsed correctly
+
+**ExcelSizeChartParserTest** (unit test)
+Test cases:
+- Valid .xlsx with all columns → ParseResult.success
+- .xlsx with blank rows → skipped correctly
+- Empty sheet (header only) → success with empty entries
+- Rows exceeding 500 → ParseResult.failure
+
+Use small in-memory test files built programmatically (Apache POI for Excel, plain strings for CSV).
+
+**SizeChartServiceTest** (unit test with Mockito)
+Test cases:
+- uploadFromFile: happy path → new version created, previous deactivated, entries saved
+- uploadFromFile: ParseResult.failure → throws SizeChartParseException
+- uploadFromFile: product not found → throws ProductNotFoundException
+- uploadManual: empty entries → throws SizeChartParseException
+- getActiveSizeChart: no active chart → returns Optional.empty()
+
+**SizeChartControllerIT** (integration test, extends AbstractIntegrationTest)
+Test cases:
+- POST /upload with valid CSV → 200, version=1, entriesSaved > 0
+- POST /upload with second CSV → 200, version=2, previous version deactivated
+- POST /upload with invalid secret key → 401
+- POST /upload with file too large → 400
+- POST /manual with valid entries → 200
+- GET /active → 200, returns entries matching last upload
+- DELETE /active → 204, subsequent GET /active returns empty list
+- GET /active for product belonging to different tenant → 404
+
+### CONSTRAINTS
+- Build test CSV content as String in test code — no test resource files needed for CSV
+- Build test Excel files programmatically with Apache POI in a TestDataBuilder utility class
+- All integration tests must clean up after themselves
+
+### EXPECTED OUTPUT
+- CsvSizeChartParserTest.java
+- ExcelSizeChartParserTest.java
+- SizeChartServiceTest.java
+- SizeChartControllerIT.java
+- TestDataBuilder.java (test utility for building test fixtures)
+
+### PHASE 4 COMPLETION CHECKLIST
+Before moving to Phase 5, verify:
+- [ ] All tests pass (mvn verify)
+- [ ] CSV upload creates a new versioned SizeChart and deactivates previous
+- [ ] Excel upload works identically to CSV
+- [ ] Manual entry endpoint accepts JSON list of SizeEntryData
+- [ ] File size limit enforced (2MB)
+- [ ] GET /active returns the correct active entries
+- [ ] DELETE /active soft-deactivates without deleting data
+- [ ] Tenant isolation: a store cannot access another store's products
+- [ ] After upload, a widget recommendation request returns a valid size recommendation
