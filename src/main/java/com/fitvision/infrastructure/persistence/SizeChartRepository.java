@@ -2,9 +2,11 @@ package com.fitvision.infrastructure.persistence;
 
 import com.fitvision.domain.sizechart.SizeChart;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,4 +25,20 @@ public interface SizeChartRepository extends JpaRepository<SizeChart, UUID> {
     Optional<SizeChart> findActiveByProductIdAndTenantId(
             @Param("productId") UUID productId,
             @Param("tenantId") UUID tenantId);
+
+    /**
+     * Bulk-deactivates all size chart versions for a product.
+     * Used before creating a new version to ensure only one active version exists at a time.
+     */
+    @Modifying
+    @Query("UPDATE SizeChart sc SET sc.active = false WHERE sc.productId = :productId")
+    void deactivateAllByProductId(@Param("productId") UUID productId);
+
+    /**
+     * Returns all size chart versions for a product, ordered from newest to oldest.
+     * Used to determine the next version number.
+     */
+    @Query("SELECT sc FROM SizeChart sc WHERE sc.productId = :productId ORDER BY sc.version DESC")
+    List<SizeChart> findAllByProductIdOrderByVersionDesc(@Param("productId") UUID productId);
 }
+
