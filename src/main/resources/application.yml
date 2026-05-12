@@ -49,3 +49,9 @@ logging:
     com.fitvision: DEBUG
     org.springframework.security: INFO
     org.flywaydb: INFO
+
+fitvision:
+  jwt:
+    # change this in production
+    secret: "fitvision-dev-secret-change-this-in-production-32-bytes-minimum!"
+    expiration-hours: 24

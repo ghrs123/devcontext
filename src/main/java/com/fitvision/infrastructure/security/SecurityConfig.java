@@ -13,6 +13,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -27,7 +29,9 @@ import java.util.List;
  * <ul>
  *   <li>{@code /api/widget/**} — requires a valid store API key (enforced by
  *       {@link ApiKeyAuthFilter}).</li>
- *   <li>{@code /api/dashboard/**} — permit all for now; JWT filter added in Phase 5.</li>
+ *   <li>{@code /api/dashboard/v1/auth/**} — permit all (registration + login).</li>
+ *   <li>{@code /api/dashboard/**} — requires a valid JWT (enforced by
+ *       {@link JwtAuthFilter}).</li>
  *   <li>{@code /actuator/health} — permit all.</li>
  *   <li>CSRF disabled; sessions stateless.</li>
  * </ul>
@@ -40,12 +44,12 @@ import java.util.List;
 public class SecurityConfig {
 
     private final ApiKeyAuthFilter apiKeyAuthFilter;
-    private final SecretKeyAuthFilter secretKeyAuthFilter;
+        private final JwtAuthFilter jwtAuthFilter;
 
     public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter,
-                          SecretKeyAuthFilter secretKeyAuthFilter) {
+                                                  JwtAuthFilter jwtAuthFilter) {
         this.apiKeyAuthFilter = apiKeyAuthFilter;
-        this.secretKeyAuthFilter = secretKeyAuthFilter;
+                this.jwtAuthFilter = jwtAuthFilter;
     }
 
     @Bean
@@ -57,6 +61,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/api/dashboard/v1/auth/**").permitAll()
                         .requestMatchers("/api/dashboard/**").authenticated()
                         .requestMatchers("/api/widget/**").authenticated()
                         .anyRequest().permitAll()
@@ -65,10 +70,10 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, authException) -> {
                             String path = request.getRequestURI();
                             ErrorCode code = path.startsWith("/api/dashboard/")
-                                    ? ErrorCode.INVALID_SECRET_KEY
+                                    ? ErrorCode.UNAUTHORIZED
                                     : ErrorCode.INVALID_API_KEY;
                             String message = path.startsWith("/api/dashboard/")
-                                    ? "Missing or invalid secret key. Provide a valid X-FitVision-Secret header."
+                                    ? "Missing or invalid JWT. Provide Authorization: Bearer <token>."
                                     : "Missing or invalid API key. Provide a valid X-FitVision-Key header.";
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -80,10 +85,15 @@ public class SecurityConfig {
                         })
                 )
                 .addFilterBefore(apiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(secretKeyAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
+
+        @Bean
+        public PasswordEncoder passwordEncoder() {
+                return new BCryptPasswordEncoder(12);
+        }
 
     /**
      * CORS configuration for widget and dashboard API surfaces.
@@ -98,8 +108,8 @@ public class SecurityConfig {
 
         CorsConfiguration dashboardCors = new CorsConfiguration();
         dashboardCors.setAllowedOriginPatterns(List.of("*"));
-        dashboardCors.setAllowedMethods(List.of("GET", "POST", "DELETE", "OPTIONS"));
-        dashboardCors.setAllowedHeaders(List.of("X-FitVision-Secret", "Content-Type"));
+        dashboardCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        dashboardCors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         dashboardCors.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

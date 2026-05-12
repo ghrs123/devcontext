@@ -42,6 +42,9 @@ public class Store {
     @Column(name = "api_key_secret", nullable = false)
     private String apiKeySecret;
 
+    @Column(name = "password_hash")
+    private String passwordHash;
+
     @Column(name = "platform", nullable = false)
     private String platform;
 

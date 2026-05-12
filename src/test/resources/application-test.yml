@@ -31,3 +31,8 @@ logging:
     org.flywaydb: WARN
     org.testcontainers: INFO
     com.zaxxer.hikari: WARN
+
+fitvision:
+  jwt:
+    secret: "fitvision-test-secret-change-this-in-production-32-bytes-minimum!"
+    expiration-hours: 24

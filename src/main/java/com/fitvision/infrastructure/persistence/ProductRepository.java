@@ -2,6 +2,8 @@ package com.fitvision.infrastructure.persistence;
 
 import com.fitvision.domain.product.Product;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -9,9 +11,13 @@ import java.util.UUID;
 
 public interface ProductRepository extends JpaRepository<Product, UUID> {
 
-    Optional<Product> findByIdAndTenantId(UUID id, UUID tenantId);
+    @Query("SELECT p FROM Product p WHERE p.id = :id AND p.tenantId = :tenantId AND p.deletedAt IS NULL")
+    Optional<Product> findByIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 
-    List<Product> findAllByTenantId(UUID tenantId);
+    @Query("SELECT p FROM Product p WHERE p.tenantId = :tenantId AND p.deletedAt IS NULL ORDER BY p.createdAt DESC")
+    List<Product> findAllByTenantId(@Param("tenantId") UUID tenantId);
 
-    Optional<Product> findByExternalProductIdAndTenantId(String externalProductId, UUID tenantId);
+    @Query("SELECT p FROM Product p WHERE p.externalProductId = :externalProductId AND p.tenantId = :tenantId AND p.deletedAt IS NULL")
+    Optional<Product> findByExternalProductIdAndTenantId(@Param("externalProductId") String externalProductId,
+                                                         @Param("tenantId") UUID tenantId);
 }
