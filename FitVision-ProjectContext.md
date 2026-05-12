@@ -398,19 +398,25 @@ sizeChartRepository.findById(id);
 # FitVision — Build Progress
 
 ## Current Status
-Phase 5 — Complete. 32 integration tests + 45 unit tests = 77 tests total, all passing. Backend is feature-complete for MVP. Next: Phase 6 — Embeddable Widget (Vanilla JS).
+Phase 6 — Complete. Widget is 4.32KB gzipped, full flow validated in browser. Next: Phase 7 — Store Dashboard (Next.js frontend).
 
 ## What Has Been Built
 
 ### Backend (Spring Boot 3.x, Java 21)
 - 80+ production classes
-- 14 integration test classes, 10+ unit test classes
-- 3 Flyway migrations (V1, V2, V3)
 - 77 tests passing (45 unit + 32 integration)
+- 3 Flyway migrations (V1, V2, V3)
+
+### Widget (Vanilla JS + Vite)
+- Single JS file: fitvision-widget.min.js (4.32KB gzipped)
+- Full flow: trigger → form → loading → API → result/error
+- Accessibility: ARIA roles, keyboard navigation, prefers-reduced-motion
+- Mock mode for local testing without backend
+- build-check.js validates gzip size < 50KB on every build
 
 ### Infrastructure
-- Singleton Testcontainers pattern in AbstractIntegrationTest — one PostgreSQL container per JVM
-- Docker Compose for local development — pending (add before Phase 7)
+- Singleton Testcontainers pattern in AbstractIntegrationTest
+- Docker Compose — pending (add before deployment)
 
 ## Completed Phases
 
@@ -427,73 +433,54 @@ Phase 5 — Complete. 32 integration tests + 45 unit tests = 77 tests total, all
 - Gender enum (MALE=1.0, FEMALE=0.0, UNISEX=0.5 genderFactor)
 - BodyProfile value object (immutable, OUT_OF_RANGE when BMI < 15 or > 45)
 - BodyProfileCalculator: BMI → Deurenberg body fat → chest/waist/hip estimates
-- SizeChartMatcher: dimension matching, confidence score, MatchQuality (EXACT/PARTIAL/CLOSEST/NO_MATCH)
+- SizeChartMatcher: dimension matching, confidence score, MatchQuality enum
 - RecommendationEngine: 7-step orchestrator, @Transactional, GDPR flag
-- 30 unit tests (BodyProfileCalculator=13, SizeChartMatcher=10, RecommendationEngine=7)
+- 30 unit tests
 
 ### Phase 3 — Widget API ✅
 - POST /api/widget/v1/size-recommendation
-- CORS: all origins for /api/widget/**, allowed methods POST/OPTIONS
-- Graceful fallback: HTTP 200 with hasSizeChart=false when no chart exists
-- confidenceLabel (High/Medium/Low) and human-readable message in response
+- CORS: all origins for /api/widget/**, POST/OPTIONS
+- Graceful fallback: HTTP 200 with hasSizeChart=false
+- confidenceLabel (High/Medium/Low) and human-readable message
 - 6 integration tests via MockMvc
 - scripts/manual-test.sh
 
 ### Phase 4 — Size Chart Management ✅
-- SizeEntryData record, ParseResult value object
 - CsvSizeChartParser (OpenCSV, UTF-8/BOM, max 500 rows)
 - ExcelSizeChartParser (Apache POI, .xlsx only, max 500 rows)
-- SizeChartParserFactory: detects format by content type + filename
-- SizeChartService: versioned uploads (new=active, previous=inactive), manual entry
-- SecretKeyAuthFilter: X-FitVision-Secret for dashboard (kept for /size-charts/**)
+- SizeChartParserFactory: format detection by content type + filename
+- SizeChartService: versioned uploads, manual entry
 - POST /upload, POST /manual, GET /active, DELETE /active
 - File size limit: 2MB
-- TestDataBuilder utility for programmatic test fixtures
-- End-to-end validated: upload CSV → widget returns valid size recommendation
+- End-to-end: upload CSV → widget returns valid size recommendation
 
 ### Phase 5 — Store Dashboard API ✅
-
-**Prompt 5.1 — JWT Authentication**
-- V2__add_store_password.sql
-- JwtService (24h expiry, 256-bit secret from application.yml)
-- StoreAuthService: register (BCrypt strength 12, generates apiKeyPublic + apiKeySecret), login
-- POST /api/dashboard/v1/auth/register, POST /api/dashboard/v1/auth/login
-- JwtAuthFilter: Bearer token on /api/dashboard/** except /auth/**
-- ErrorCode: STORE_ALREADY_EXISTS, INVALID_CREDENTIALS (both return 401 — no email enumeration)
-
-**Prompt 5.2 — Store Profile + Product Management**
-- V3__add_product_soft_delete.sql
+- JWT auth: register, login, BCrypt strength 12, 24h token
 - StoreController: GET/PATCH /profile, GET /api-keys, POST /api-keys/regenerate
-- ProductController: full CRUD — GET /, POST /, GET /{id}, PUT /{id}, DELETE /{id}
-- ProductService: tenant isolation, soft delete, size chart deactivation on delete
-- hasSizeChart computed without N+1 query
-- Soft deleted products excluded from all queries
+- ProductController: full CRUD with soft delete
+- AnalyticsController: summary (totalRecommendations, last30Days, avgConfidence, qualityDistribution, topProducts) + paginated list
+- 32 integration tests: StoreAuthControllerIT, StoreControllerIT, ProductControllerIT, AnalyticsControllerIT
 
-**Prompt 5.3 — Analytics + Full Integration Tests**
-- AnalyticsService + AnalyticsController
-- GET /api/dashboard/v1/analytics/summary: totalRecommendations, last30Days, averageConfidence, qualityDistribution, topProducts (top 5)
-- GET /api/dashboard/v1/analytics/recommendations: paginated list (page/size params)
-- JPQL queries: findAverageConfidenceByTenantId, countByTenantIdAndQuality, findTopProductsByTenantId (Object[] projection)
-- Integration tests: StoreAuthControllerIT, StoreControllerIT, ProductControllerIT, AnalyticsControllerIT
-- 32 integration tests total, all passing
+### Phase 6 — Embeddable Widget ✅
+- /widget — separate directory from Spring Boot backend
+- Vite build, iife format, single file output
+- api.js: fetch + AbortController + timeout, typed errors (NetworkError, ApiError)
+- ui.js: renderTrigger, renderForm, renderLoading, renderResult, renderError
+- main.js: auto-init on DOMContentLoaded, window.FitVision.init(), multi-container support
+- styles.css: scoped .fitvision- prefix, responsive, prefers-reduced-motion
+- Accessibility: ARIA roles, labels, keyboard navigation
+- build-check.js: gzip size validation on every build
+- Output: fitvision-widget.min.js — 4.32KB gzipped
+- Validated in browser: success, hasSizeChart=false fallback, error state, multiple widgets on same page
 
 ## Current Phase
-Phase 6 — Embeddable Widget (Vanilla JS + Vite) ← next to execute
+Phase 7 — Store Dashboard (Next.js 14 frontend)
 
 ## Remaining Phases
 
-### Phase 6 — Embeddable Widget (next to execute)
-- Vanilla JS widget (Vite, max 50KB gzipped)
-- Body measurement input form
-- POST to /api/widget/v1/size-recommendation
-- Recommendation display with confidence indicator and message
-- Fallback state when hasSizeChart=false
-- Async/deferred loading — never blocks store page
-- CDN deployment via Cloudflare
-
-### Phase 7 — Store Dashboard (Frontend)
-- Next.js 14 + Tailwind + shadcn/ui
-- Store onboarding flow (register → add product → upload size chart → get script tag)
+### Phase 7 — Store Dashboard (next to execute)
+- Next.js 14 + Tailwind CSS + shadcn/ui
+- Store onboarding flow: register → add product → upload size chart → get script tag
 - Product and size chart management UI
 - Analytics dashboard
 - Stripe billing UI
@@ -512,15 +499,16 @@ Phase 6 — Embeddable Widget (Vanilla JS + Vite) ← next to execute
 
 ## Decisions Made
 - JWT chosen over Keycloak — simpler, no external dependency
-- Singleton Testcontainers pattern — @Testcontainers removed from AbstractIntegrationTest, static block starts container once per JVM
-- SecretKeyAuthFilter retained on /size-charts/** for backward compatibility with Phase 4 tests
+- Singleton Testcontainers pattern — static block starts container once per JVM
+- SecretKeyAuthFilter retained on /size-charts/** for backward compatibility
 - GDPR: body measurements stored as BigDecimal.ZERO when storeBodyData=false
+- Widget CSS injected into JS bundle — single file, no separate CSS
 
 ## Decisions Pending
 - Pricing tiers (per recommendation vs flat monthly)
 - Which brands in initial FitVision-managed database
-- Docker Compose setup (add before Phase 7)
-- Stripe integration timing (Phase 5 originally, likely Phase 7)
+- Docker Compose setup (before deployment)
+- Stripe integration timing (Phase 7)
 # FitVision — Phase 1 Prompts
 
 ---
@@ -2237,3 +2225,357 @@ Before moving to Phase 7, verify:
 - [ ] All form inputs are keyboard navigable
 - [ ] No JS errors in browser console during the full flow
 - [ ] Widget does not conflict when two product divs exist on the same page
+# FitVision — Phase 7 Prompts: Store Dashboard (Next.js)
+
+> Pre-condition: Phase 6 complete. Backend fully operational (77 tests passing). Widget built and validated (4.32KB gzipped). API endpoints available: auth, store profile, products, size charts, analytics.
+
+---
+
+## Prompt 7.1 — Next.js Project Setup + Authentication Flow
+
+### CONTEXT
+We are building the FitVision store dashboard — a web application where store owners manage their account, products, size charts, and view analytics. It connects to the existing Spring Boot backend API.
+
+Backend base URL (dev): http://localhost:8080
+Auth endpoints:
+- POST /api/dashboard/v1/auth/register → { accessToken, apiKeyPublic }
+- POST /api/dashboard/v1/auth/login → { accessToken, apiKeyPublic }
+All dashboard endpoints require: Authorization: Bearer {accessToken}
+
+The dashboard lives in a separate directory:
+```
+/dashboard
+  ├── app/                    # Next.js App Router
+  │   ├── (auth)/             # Auth route group (no sidebar)
+  │   │   ├── login/
+  │   │   └── register/
+  │   ├── (app)/              # Authenticated route group (with sidebar)
+  │   │   ├── dashboard/      # Analytics overview
+  │   │   ├── products/       # Product management
+  │   │   └── settings/       # Store profile + API keys
+  │   ├── layout.tsx
+  │   └── globals.css
+  ├── components/
+  │   ├── ui/                 # shadcn/ui components
+  │   └── app/                # App-specific components
+  ├── lib/
+  │   ├── api.ts              # API client
+  │   ├── auth.ts             # Auth helpers
+  │   └── types.ts            # Shared TypeScript types
+  ├── hooks/
+  ├── middleware.ts            # Route protection
+  ├── next.config.js
+  ├── tailwind.config.ts
+  └── package.json
+```
+
+### OBJECTIVE
+Set up the Next.js project with auth flow.
+
+**Project setup**
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- shadcn/ui (init with default theme, slate base colour)
+- Install shadcn components needed for auth: Button, Input, Label, Card, Form
+- next.config.js: set NEXT_PUBLIC_API_URL from env
+
+**.env.local**
+```
+NEXT_PUBLIC_API_URL=http://localhost:8080
+```
+
+**lib/types.ts** — shared TypeScript types
+```typescript
+// Auth
+interface AuthResponse { accessToken: string; tokenType: string; expiresIn: number; apiKeyPublic: string; }
+interface RegisterRequest { name: string; email: string; password: string; platform?: string; }
+interface LoginRequest { email: string; password: string; }
+
+// Store
+interface StoreProfile { id: string; name: string; email: string; plan: string; platform: string; apiKeyPublic: string; subscriptionStatus: string; }
+
+// Product
+interface Product { id: string; externalProductId: string; name: string; category: string; genderTarget: string; brandId?: string; brandName?: string; hasSizeChart: boolean; }
+
+// Analytics
+interface AnalyticsSummary { totalRecommendations: number; recommendationsLast30Days: number; averageConfidenceScore: number; qualityDistribution: Record<string, number>; topProducts: ProductRecommendationStat[]; }
+interface ProductRecommendationStat { productId: string; productName: string; recommendationCount: number; averageConfidence: number; }
+```
+
+**lib/api.ts** — typed API client
+- Base fetch wrapper: reads token from localStorage, adds Authorization header
+- Methods: register, login, getProfile, updateProfile, getApiKeys, regenerateApiKeys, getProducts, createProduct, updateProduct, deleteProduct, uploadSizeChart, getActiveSizeChart, getAnalyticsSummary
+- All methods return typed responses or throw ApiError
+- Handle 401 → clear token + redirect to /login
+
+**lib/auth.ts**
+- saveToken(token: string): void — saves to localStorage
+- getToken(): string | null
+- clearToken(): void
+- isAuthenticated(): boolean
+
+**middleware.ts**
+- Protect all /dashboard/**, /products/**, /settings/** routes
+- Redirect unauthenticated users to /login
+- Redirect authenticated users away from /login and /register to /dashboard
+
+**Login page** (app/(auth)/login/page.tsx)
+- Email + password form
+- Calls api.login(), saves token, redirects to /dashboard
+- Link to register page
+- Show error message on failed login
+
+**Register page** (app/(auth)/register/page.tsx)
+- Name + email + password + platform (select: Shopify / WooCommerce / Other) form
+- Calls api.register(), saves token, redirects to /dashboard
+- Link to login page
+
+### CONSTRAINTS
+- Token stored in localStorage (simple for MVP — not httpOnly cookie)
+- All forms use React Hook Form + Zod validation
+- shadcn/ui Form component for consistent field validation display
+- Password: min 8 characters (Zod)
+- Email: valid format (Zod)
+
+### EXPECTED OUTPUT
+- /dashboard/package.json
+- /dashboard/next.config.js
+- /dashboard/tailwind.config.ts
+- /dashboard/.env.local
+- /dashboard/lib/types.ts
+- /dashboard/lib/api.ts
+- /dashboard/lib/auth.ts
+- /dashboard/middleware.ts
+- /dashboard/app/(auth)/login/page.tsx
+- /dashboard/app/(auth)/register/page.tsx
+- /dashboard/app/layout.tsx
+- /dashboard/app/globals.css
+
+### NEXT STEP
+Prompt 7.2 will build the authenticated app shell (sidebar, layout) and the analytics dashboard page.
+
+---
+
+## Prompt 7.2 — App Shell + Analytics Dashboard
+
+### CONTEXT
+FitVision dashboard. Auth flow is complete. Authenticated routes are under app/(app)/. The API client (lib/api.ts) is fully typed. AnalyticsSummary type is defined.
+
+Backend analytics endpoints:
+- GET /api/dashboard/v1/analytics/summary → AnalyticsSummary
+- GET /api/dashboard/v1/analytics/recommendations?page=0&size=10 → paginated list
+
+### OBJECTIVE
+Build the authenticated app shell and analytics overview page.
+
+**App shell** (app/(app)/layout.tsx)
+- Sidebar navigation with links: Dashboard, Products, Settings
+- Top bar with store name and logout button
+- Sidebar collapses to hamburger on mobile
+- Active link highlighted
+- Logout: clears token, redirects to /login
+
+**Sidebar items:**
+- Dashboard (icon: LayoutDashboard) → /dashboard
+- Products (icon: Package) → /products
+- Settings (icon: Settings) → /settings
+
+**Analytics dashboard** (app/(app)/dashboard/page.tsx)
+
+Summary cards row:
+- Total Recommendations (number, large)
+- Last 30 Days (number with trend vs previous period if available)
+- Average Confidence (percentage, colour coded: green ≥ 80%, amber 50–79%, red < 50%)
+- Size Chart Coverage (% of products with active size chart — derived from product list)
+
+Quality distribution chart:
+- Bar chart or donut chart showing EXACT / PARTIAL / CLOSEST / NO_MATCH counts
+- Use recharts (install as dependency)
+
+Top products table:
+- Columns: Product name, Recommendations, Avg confidence
+- Max 5 rows
+- Link to product detail
+
+**Loading and empty states:**
+- Skeleton loaders while data fetches
+- Empty state illustration when totalRecommendations = 0: "No recommendations yet. Add a product and upload a size chart to get started."
+
+**Data fetching:**
+- Use SWR for data fetching (install as dependency)
+- Revalidate every 60 seconds
+
+### CONSTRAINTS
+- No server components for authenticated pages — use client components with SWR
+- recharts for charts — no other chart library
+- Colour system from Tailwind + shadcn tokens — no hardcoded hex colours
+- All numbers formatted with locale (toLocaleString())
+
+### EXPECTED OUTPUT
+- /dashboard/app/(app)/layout.tsx (app shell with sidebar)
+- /dashboard/app/(app)/dashboard/page.tsx
+- /dashboard/components/app/Sidebar.tsx
+- /dashboard/components/app/TopBar.tsx
+- /dashboard/components/app/StatCard.tsx
+- /dashboard/components/app/QualityChart.tsx
+- /dashboard/components/app/TopProductsTable.tsx
+
+### NEXT STEP
+Prompt 7.3 will build the product management pages and size chart upload flow.
+
+---
+
+## Prompt 7.3 — Product Management + Size Chart Upload
+
+### CONTEXT
+FitVision dashboard. App shell and analytics page are complete. API client has all product and size chart methods typed.
+
+Backend endpoints:
+- GET /api/dashboard/v1/products → Product[]
+- POST /api/dashboard/v1/products → Product (201)
+- PUT /api/dashboard/v1/products/{id} → Product
+- DELETE /api/dashboard/v1/products/{id} → 204
+- POST /api/dashboard/v1/size-charts/{productId}/upload → multipart/form-data
+- POST /api/dashboard/v1/size-charts/{productId}/manual → SizeEntryData[]
+- GET /api/dashboard/v1/size-charts/{productId}/active → SizeEntryData[]
+- DELETE /api/dashboard/v1/size-charts/{productId}/active → 204
+
+### OBJECTIVE
+Build the product management pages and size chart upload flow.
+
+**Products list page** (app/(app)/products/page.tsx)
+- Table with columns: Name, External ID, Category, Gender, Size Chart (badge: ✓ or ✗), Actions
+- Actions: Edit, Upload Size Chart, Delete
+- "Add Product" button opens a modal/drawer
+- Empty state: "No products yet. Add your first product."
+- Search/filter by name (client-side)
+
+**Add/Edit Product** (components/app/ProductForm.tsx)
+- Fields: Name (@NotBlank), External Product ID (@NotBlank), Category (select: Tops/Bottoms/Dresses/Outerwear/Other), Gender Target (select: Male/Female/Unisex)
+- Used in a Sheet (shadcn slide-over drawer) for both add and edit
+- On save: calls api.createProduct() or api.updateProduct(), refreshes list
+
+**Delete Product**
+- Confirmation dialog (shadcn AlertDialog) before deleting
+- On confirm: calls api.deleteProduct(), refreshes list
+
+**Size Chart Upload flow** (components/app/SizeChartUpload.tsx)
+- Opens in a Sheet when "Upload Size Chart" clicked
+- Two tabs: "Upload File" and "Enter Manually"
+
+Upload File tab:
+- Drag-and-drop file zone (CSV or Excel)
+- Shows file name and size after selection
+- Upload button calls api.uploadSizeChart()
+- Shows result: entries saved, warnings list
+- Shows current active size chart entries in a table after upload
+
+Manual Entry tab:
+- Table editor: add rows with size_label, chest_min/max, waist_min/max, hip_min/max, height_min/max
+- "Add row" button
+- Delete row button per row
+- Submit calls api.uploadManualSizeChart()
+
+**Size chart entries table** (components/app/SizeChartTable.tsx)
+- Columns: Size, Chest (min-max), Waist (min-max), Hip (min-max), Height (min-max)
+- Used in the upload sheet to show current active chart
+- Shows "No size chart uploaded yet" when empty
+
+### CONSTRAINTS
+- All mutations invalidate SWR cache for the products list
+- File drag-and-drop: use native HTML5 drag events — no external library
+- Sheet (drawer) pattern from shadcn/ui
+- File upload: accept only .csv and .xlsx (validate client-side before upload)
+- Show upload warnings (skipped rows) in a collapsible section after upload
+
+### EXPECTED OUTPUT
+- /dashboard/app/(app)/products/page.tsx
+- /dashboard/components/app/ProductForm.tsx
+- /dashboard/components/app/SizeChartUpload.tsx
+- /dashboard/components/app/SizeChartTable.tsx
+
+### NEXT STEP
+Prompt 7.4 will build the settings page (store profile + API keys + script tag integration guide).
+
+---
+
+## Prompt 7.4 — Settings Page + Integration Guide
+
+### CONTEXT
+FitVision dashboard. Products and size chart upload are complete. The settings page is where store owners manage their profile, API keys, and get the script tag to install the widget.
+
+Backend endpoints:
+- GET /api/dashboard/v1/store/profile → StoreProfile
+- PATCH /api/dashboard/v1/store/profile → StoreProfile
+- GET /api/dashboard/v1/store/api-keys → { apiKeyPublic, apiKeySecret }
+- POST /api/dashboard/v1/store/api-keys/regenerate → { apiKeyPublic, apiKeySecret }
+
+Widget script tag template:
+```html
+<div
+  data-fitvision-product-id="YOUR_PRODUCT_ID"
+  data-fitvision-key="YOUR_API_KEY">
+</div>
+<script src="https://cdn.fitvision.io/widget/fitvision-widget.min.js" async defer></script>
+```
+
+### OBJECTIVE
+Build the settings page with three sections.
+
+**Settings page** (app/(app)/settings/page.tsx)
+Three card sections on the page:
+
+**Section 1 — Store Profile**
+- Fields: Name (editable), Email (read-only), Platform (editable select)
+- Save button — calls api.updateProfile()
+- Success toast on save (shadcn useToast)
+
+**Section 2 — API Keys**
+- Shows apiKeyPublic (always visible, copyable)
+- Shows apiKeySecret (hidden by default, reveal on click, copyable)
+- "Regenerate Keys" button with confirmation dialog
+- Warning text: "Regenerating keys will immediately invalidate the current widget installation."
+- Copy button for each key (copies to clipboard, shows "Copied!" feedback)
+
+**Section 3 — Widget Integration Guide**
+- Step-by-step instructions:
+  1. Copy your API key (shown inline)
+  2. Add the container div to your product page template
+  3. Add the script tag before </body>
+- Code block showing the complete script tag (syntax highlighted, copyable)
+- Product ID placeholder explained: "Replace YOUR_PRODUCT_ID with the External Product ID you set in FitVision for each product"
+- Platform-specific tips (if platform = shopify: link to Shopify theme editor docs)
+
+**Reusable components:**
+- CopyButton.tsx — button that copies text to clipboard and shows feedback
+- CodeBlock.tsx — syntax-highlighted read-only code display (no external syntax highlighter — use a <pre> with Tailwind prose styling)
+
+### CONSTRAINTS
+- API keys loaded fresh on page load — do not cache in SWR (security)
+- apiKeySecret hidden by default — toggle with eye icon (lucide-react)
+- Regenerate confirmation uses shadcn AlertDialog
+- Toast notifications use shadcn Toaster (add to root layout)
+
+### EXPECTED OUTPUT
+- /dashboard/app/(app)/settings/page.tsx
+- /dashboard/components/app/CopyButton.tsx
+- /dashboard/components/app/CodeBlock.tsx
+- Updated /dashboard/app/layout.tsx (Toaster added)
+
+### PHASE 7 COMPLETION CHECKLIST
+Before moving to Phase 8, verify:
+- [ ] npm run dev starts without errors
+- [ ] Register flow: fill form → submit → redirect to /dashboard
+- [ ] Login flow: fill form → submit → redirect to /dashboard
+- [ ] Logout: clears token → redirect to /login
+- [ ] Unauthenticated access to /dashboard → redirect to /login
+- [ ] Analytics page loads with summary cards and quality chart
+- [ ] Products page: create → appears in list with hasSizeChart=false
+- [ ] Upload CSV size chart → hasSizeChart badge turns green
+- [ ] Delete product → disappears from list
+- [ ] Settings: update profile name → saved successfully
+- [ ] Settings: copy API key → clipboard feedback shown
+- [ ] Settings: regenerate keys → confirmation dialog → new keys shown
+- [ ] Integration guide shows correct script tag with store's API key
+- [ ] Dashboard is usable on mobile (responsive sidebar)
