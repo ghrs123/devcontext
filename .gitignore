@@ -25,3 +25,7 @@ Thumbs.db
 
 # Scratch files
 maven_output.txt
+/widget/node_modules
+widget/package-lock.json
+widget/package-lock.json
+widget/package-lock.json
