@@ -395,65 +395,105 @@ sizeChartRepository.findById(id);
 - Store the scrape timestamp and source URL for every scraped size chart
 - Flag scraped data with staleness after 30 days — trigger re-scrape
 # FitVision — Build Progress
+# FitVision — Build Progress
 
 ## Current Status
-Phase 0 — Project not yet started. Context and roadmap defined.
+Phase 5 — Complete. 32 integration tests + 45 unit tests = 77 tests total, all passing. Backend is feature-complete for MVP. Next: Phase 6 — Embeddable Widget (Vanilla JS).
 
 ## What Has Been Built
-Nothing yet.
+
+### Backend (Spring Boot 3.x, Java 21)
+- 80+ production classes
+- 14 integration test classes, 10+ unit test classes
+- 3 Flyway migrations (V1, V2, V3)
+- 77 tests passing (45 unit + 32 integration)
+
+### Infrastructure
+- Singleton Testcontainers pattern in AbstractIntegrationTest — one PostgreSQL container per JVM
+- Docker Compose for local development — pending (add before Phase 7)
+
+## Completed Phases
+
+### Phase 1 — Foundation ✅
+- Spring Boot 3.x, Maven, Java 21
+- V1__init_schema.sql — all tables with UUID PKs, indexes, tenant isolation
+- JPA entities: Store, Brand, Product, SizeChart, SizeEntry, RecommendationRequest
+- Repository layer with mandatory tenant_id on every tenant-scoped query
+- ApiResponse<T> envelope, GlobalExceptionHandler, RequestIdFilter
+- ApiKeyAuthFilter (widget), TenantContext (ThreadLocal, always cleared)
+- Health check at /actuator/health
+
+### Phase 2 — Recommendation Engine ✅
+- Gender enum (MALE=1.0, FEMALE=0.0, UNISEX=0.5 genderFactor)
+- BodyProfile value object (immutable, OUT_OF_RANGE when BMI < 15 or > 45)
+- BodyProfileCalculator: BMI → Deurenberg body fat → chest/waist/hip estimates
+- SizeChartMatcher: dimension matching, confidence score, MatchQuality (EXACT/PARTIAL/CLOSEST/NO_MATCH)
+- RecommendationEngine: 7-step orchestrator, @Transactional, GDPR flag
+- 30 unit tests (BodyProfileCalculator=13, SizeChartMatcher=10, RecommendationEngine=7)
+
+### Phase 3 — Widget API ✅
+- POST /api/widget/v1/size-recommendation
+- CORS: all origins for /api/widget/**, allowed methods POST/OPTIONS
+- Graceful fallback: HTTP 200 with hasSizeChart=false when no chart exists
+- confidenceLabel (High/Medium/Low) and human-readable message in response
+- 6 integration tests via MockMvc
+- scripts/manual-test.sh
+
+### Phase 4 — Size Chart Management ✅
+- SizeEntryData record, ParseResult value object
+- CsvSizeChartParser (OpenCSV, UTF-8/BOM, max 500 rows)
+- ExcelSizeChartParser (Apache POI, .xlsx only, max 500 rows)
+- SizeChartParserFactory: detects format by content type + filename
+- SizeChartService: versioned uploads (new=active, previous=inactive), manual entry
+- SecretKeyAuthFilter: X-FitVision-Secret for dashboard (kept for /size-charts/**)
+- POST /upload, POST /manual, GET /active, DELETE /active
+- File size limit: 2MB
+- TestDataBuilder utility for programmatic test fixtures
+- End-to-end validated: upload CSV → widget returns valid size recommendation
+
+### Phase 5 — Store Dashboard API ✅
+
+**Prompt 5.1 — JWT Authentication**
+- V2__add_store_password.sql
+- JwtService (24h expiry, 256-bit secret from application.yml)
+- StoreAuthService: register (BCrypt strength 12, generates apiKeyPublic + apiKeySecret), login
+- POST /api/dashboard/v1/auth/register, POST /api/dashboard/v1/auth/login
+- JwtAuthFilter: Bearer token on /api/dashboard/** except /auth/**
+- ErrorCode: STORE_ALREADY_EXISTS, INVALID_CREDENTIALS (both return 401 — no email enumeration)
+
+**Prompt 5.2 — Store Profile + Product Management**
+- V3__add_product_soft_delete.sql
+- StoreController: GET/PATCH /profile, GET /api-keys, POST /api-keys/regenerate
+- ProductController: full CRUD — GET /, POST /, GET /{id}, PUT /{id}, DELETE /{id}
+- ProductService: tenant isolation, soft delete, size chart deactivation on delete
+- hasSizeChart computed without N+1 query
+- Soft deleted products excluded from all queries
+
+**Prompt 5.3 — Analytics + Full Integration Tests**
+- AnalyticsService + AnalyticsController
+- GET /api/dashboard/v1/analytics/summary: totalRecommendations, last30Days, averageConfidence, qualityDistribution, topProducts (top 5)
+- GET /api/dashboard/v1/analytics/recommendations: paginated list (page/size params)
+- JPQL queries: findAverageConfidenceByTenantId, countByTenantIdAndQuality, findTopProductsByTenantId (Object[] projection)
+- Integration tests: StoreAuthControllerIT, StoreControllerIT, ProductControllerIT, AnalyticsControllerIT
+- 32 integration tests total, all passing
 
 ## Current Phase
-Phase 1 — Foundation (next to execute)
+Phase 6 — Embeddable Widget (Vanilla JS + Vite) ← next to execute
 
-## Roadmap
+## Remaining Phases
 
-### Phase 1 — Foundation
-- Spring Boot project setup
-- PostgreSQL schema with Flyway migrations
-- Core domain entities (Store, Brand, Product, SizeChart, SizeEntry)
-- Base repository layer with tenant isolation pattern
-- API response envelope and global exception handler
-- Spring Security with API key filter (widget) and JWT filter (dashboard)
-- Health check endpoint
-
-### Phase 2 — Recommendation Engine
-- BodyProfile computation (BMI, Deurenberg, YMCA formulas)
-- SizeChart matching algorithm
-- Confidence score calculation
-- RecommendationEngine service (stateless)
-- Unit tests for all formula methods
-
-### Phase 3 — Widget API
-- POST /api/widget/v1/size-recommendation endpoint
-- API key validation
-- RecommendationRequest persistence (with consent flag)
-- Graceful fallback when no size chart exists
-- CORS configuration for cross-origin widget calls
-
-### Phase 4 — Size Chart Management
-- CSV upload and parsing (OpenCSV)
-- Excel upload and parsing (Apache POI)
-- Size chart versioning and activation
-- Manual size entry via API
-- Validation rules for size data
-
-### Phase 5 — Store Dashboard API
-- Store registration and authentication (JWT)
-- Brand and product management endpoints
-- Size chart management endpoints
-- Analytics endpoints (recommendation counts, confidence distribution)
-- Stripe subscription integration
-
-### Phase 6 — Embeddable Widget (Frontend)
-- Vanilla JS widget build (Vite)
+### Phase 6 — Embeddable Widget (next to execute)
+- Vanilla JS widget (Vite, max 50KB gzipped)
 - Body measurement input form
-- Recommendation display with confidence indicator
-- Fallback state (no size chart available)
+- POST to /api/widget/v1/size-recommendation
+- Recommendation display with confidence indicator and message
+- Fallback state when hasSizeChart=false
+- Async/deferred loading — never blocks store page
 - CDN deployment via Cloudflare
 
 ### Phase 7 — Store Dashboard (Frontend)
-- Next.js dashboard
-- Store onboarding flow
+- Next.js 14 + Tailwind + shadcn/ui
+- Store onboarding flow (register → add product → upload size chart → get script tag)
 - Product and size chart management UI
 - Analytics dashboard
 - Stripe billing UI
@@ -465,15 +505,22 @@ Phase 1 — Foundation (next to execute)
 - App Store listing
 
 ### Phase 9 — Scraping Pipeline
-- Playwright scraper for major brands
+- Playwright scraper for major brands (Zara, H&M, etc.)
 - Scheduled re-scrape every 30 days
 - Scrape monitoring and alerting
 - Manual override for scraped data
 
+## Decisions Made
+- JWT chosen over Keycloak — simpler, no external dependency
+- Singleton Testcontainers pattern — @Testcontainers removed from AbstractIntegrationTest, static block starts container once per JVM
+- SecretKeyAuthFilter retained on /size-charts/** for backward compatibility with Phase 4 tests
+- GDPR: body measurements stored as BigDecimal.ZERO when storeBodyData=false
+
 ## Decisions Pending
-- Whether to use Keycloak or custom JWT for dashboard auth
 - Pricing tiers (per recommendation vs flat monthly)
-- Which brands to include in the initial FitVision-managed database
+- Which brands in initial FitVision-managed database
+- Docker Compose setup (add before Phase 7)
+- Stripe integration timing (Phase 5 originally, likely Phase 7)
 # FitVision — Phase 1 Prompts
 
 ---
@@ -794,6 +841,92 @@ docker start fitvision-db
 - [ ] `docker ps` mostra `fitvision-db` com status `Up`
 - [ ] Porta 5432 disponível (não tens outro PostgreSQL a correr)
 - [ ] Só depois disto arrancar o Spring Boot
+
+---
+
+## Prompt 1.6 — Docker Setup (Retroactive)
+
+> Executar agora, antes de continuar a Fase 5.2. Objetivo: padronizar ambiente local e facilitar onboarding/execução sem setup manual.
+
+### CONTEXT
+FitVision backend já está funcional em ambiente local. Até aqui, o Docker foi usado apenas para base de dados (Prompt 0). Agora precisamos formalizar a containerização local da aplicação com Dockerfile e Docker Compose.
+
+### OBJECTIVE
+Adicionar suporte completo de execução local via Docker com:
+- Dockerfile multi-stage para o backend Spring Boot
+- docker-compose.yml com backend + PostgreSQL 16
+- volume persistente para dados da base
+- configuração por variáveis de ambiente via ficheiro .env
+- .env.example para onboarding
+- .dockerignore para otimizar build context
+
+### IMPLEMENTATION DETAILS
+
+**1. Dockerfile (multi-stage)**
+- Stage 1 (build): Maven + JDK 21 para compilar e empacotar
+- Stage 2 (runtime): JRE 21 slim para executar o jar
+- Expor porta 8080
+- Entry point: `java -jar app.jar`
+- Gerar imagem pequena e reprodutível
+
+**2. docker-compose.yml (ambiente local completo)**
+Serviços:
+- `fitvision-db`:
+  - imagem `postgres:16`
+  - variáveis `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
+  - volume nomeado para persistência
+  - porta `5432:5432`
+  - healthcheck com `pg_isready`
+- `fitvision-backend`:
+  - build via Dockerfile local
+  - depende de `fitvision-db` saudável
+  - porta `8080:8080`
+  - variáveis de ambiente lidas de `.env`
+  - `SPRING_DATASOURCE_URL` apontando para `fitvision-db:5432`
+
+**3. .env.example**
+Incluir pelo menos:
+- `POSTGRES_DB=fitvision`
+- `POSTGRES_USER=fitvision`
+- `POSTGRES_PASSWORD=fitvision`
+- `SPRING_DATASOURCE_URL=jdbc:postgresql://fitvision-db:5432/fitvision`
+- `SPRING_DATASOURCE_USERNAME=fitvision`
+- `SPRING_DATASOURCE_PASSWORD=fitvision`
+- `FITVISION_JWT_SECRET=CHANGE_THIS_IN_PRODUCTION_MIN_32_BYTES`
+- `FITVISION_JWT_EXPIRATION_HOURS=24`
+
+**4. .dockerignore**
+Ignorar artefactos e ruído de build:
+- `target/`
+- `.git/`
+- `.idea/`
+- `.vscode/`
+- `*.log`
+- `node_modules/`
+
+### CONSTRAINTS
+- Manter Java 21 em build e runtime
+- Não embutir segredos no Dockerfile ou docker-compose.yml
+- Usar `.env` local (não versionado) e `.env.example` versionado
+- Garantir compatibilidade com Flyway no arranque da aplicação
+- Compose deve funcionar com um único comando: `docker compose up --build`
+
+### EXPECTED OUTPUT
+- `Dockerfile`
+- `docker-compose.yml`
+- `.env.example`
+- `.dockerignore`
+- (Opcional) atualização do README com instruções de execução via Docker
+
+### VALIDATION CHECKLIST
+- [ ] `docker compose up --build` inicia `fitvision-db` e `fitvision-backend`
+- [ ] Backend responde em `http://localhost:8080/actuator/health`
+- [ ] Flyway executa migrations automaticamente no startup
+- [ ] Dados da DB persistem após reiniciar os containers
+- [ ] Alterar `FITVISION_JWT_SECRET` via `.env` reflete no runtime
+
+### NEXT STEP
+Com Prompt 1.6 concluído, retomar a implementação da Phase 5.2 (Store Profile + Product Management Endpoints).
 
 # FitVision — Phase 2 Prompts: Recommendation Engine
 
@@ -1537,3 +1670,570 @@ Before moving to Phase 5, verify:
 - [ ] DELETE /active soft-deactivates without deleting data
 - [ ] Tenant isolation: a store cannot access another store's products
 - [ ] After upload, a widget recommendation request returns a valid size recommendation
+# FitVision — Phase 5 Prompts: Store Dashboard API
+
+> Pre-condition: Phase 4 complete. 61 tests passing. File parsers, SizeChartService, size chart endpoints, and full end-to-end widget flow are working.
+
+---
+
+## Prompt 5.1 — JWT Authentication (Registration + Login)
+
+### CONTEXT
+FitVision backend. Spring Security 6.x is configured. Currently /api/dashboard/** is protected by SecretKeyAuthFilter (temporary). In this phase we replace that with proper JWT authentication.
+
+Add to pom.xml:
+- io.jsonwebtoken:jjwt-api:0.12.6
+- io.jsonwebtoken:jjwt-impl:0.12.6 (runtime)
+- io.jsonwebtoken:jjwt-jackson:0.12.6 (runtime)
+- org.springframework.security:spring-security-crypto (already transitive — for BCrypt)
+
+Store entity already has: id, name, email, apiKeyPublic, apiKeySecret, plan, status, platform, subscriptionStatus.
+
+Add to Store entity:
+- passwordHash (String) — BCrypt hashed password
+- Add to V1 migration or create V2__add_store_password.sql
+
+### OBJECTIVE
+Create JWT-based registration and login for store owners.
+
+**StoreRegistrationRequest** (DTO)
+- Package: com.fitvision.api.dashboard.auth
+- Fields: name (@NotBlank), email (@NotBlank @Email), password (@NotBlank @Size(min=8)), platform (String, nullable)
+
+**StoreLoginRequest** (DTO)
+- Package: com.fitvision.api.dashboard.auth
+- Fields: email (@NotBlank @Email), password (@NotBlank)
+
+**AuthResponse** (DTO)
+- Package: com.fitvision.api.dashboard.auth
+- Fields: String accessToken, String tokenType ("Bearer"), long expiresIn (seconds), String apiKeyPublic
+
+**JwtService** (@Service)
+- Package: com.fitvision.infrastructure.security
+- generateToken(UUID storeId, String email): String
+- validateToken(String token): boolean
+- extractStoreId(String token): UUID
+- extractEmail(String token): String
+- Token expiry: 24 hours
+- Secret key loaded from application.yml: fitvision.jwt.secret (minimum 256-bit key)
+- Add fitvision.jwt.secret and fitvision.jwt.expiration-hours to application.yml
+
+**StoreAuthService** (@Service)
+- Package: com.fitvision.domain.store
+- Method: AuthResponse register(StoreRegistrationRequest request)
+  1. Check email not already registered — throw STORE_ALREADY_EXISTS error if duplicate (add to ErrorCode)
+  2. Generate apiKeyPublic (UUID.randomUUID().toString().replace("-",""))
+  3. Generate apiKeySecret (same pattern, different value)
+  4. Hash password with BCryptPasswordEncoder
+  5. Save Store with status=ACTIVE, plan=FREE
+  6. Generate and return JWT
+- Method: AuthResponse login(StoreLoginRequest request)
+  1. Find store by email — throw INVALID_CREDENTIALS if not found (add to ErrorCode, HTTP 401)
+  2. Verify password with BCryptPasswordEncoder — throw INVALID_CREDENTIALS if mismatch
+  3. Generate and return JWT
+
+**StoreAuthController** (@RestController)
+- Package: com.fitvision.api.dashboard.auth
+- Base path: /api/dashboard/v1/auth
+- POST /register → calls StoreAuthService.register()
+- POST /login → calls StoreAuthService.login()
+- Both endpoints: permit all (no auth required)
+
+**JwtAuthFilter** (OncePerRequestFilter)
+- Package: com.fitvision.infrastructure.security
+- Reads Authorization: Bearer {token} header
+- Validates token via JwtService
+- Extracts storeId, loads Store from repository, sets TenantContext
+- Triggers on /api/dashboard/** EXCEPT /api/dashboard/v1/auth/**
+- Replaces SecretKeyAuthFilter on /api/dashboard/** (keep SecretKeyAuthFilter removed or disabled)
+
+**Updated SecurityConfig:**
+- /api/dashboard/v1/auth/**: permit all
+- /api/dashboard/**: authenticated via JwtAuthFilter
+- Remove SecretKeyAuthFilter from the chain
+- Add JwtAuthFilter before UsernamePasswordAuthenticationFilter
+
+**Flyway migration V2__add_store_password.sql:**
+- ALTER TABLE stores ADD COLUMN password_hash VARCHAR(255);
+
+### CONSTRAINTS
+- Never log passwords or JWT secrets
+- BCryptPasswordEncoder strength: 12
+- INVALID_CREDENTIALS must return HTTP 401 — never reveal whether email exists or password is wrong
+- JWT secret in application.yml must be clearly marked as: "change this in production"
+- apiKeyPublic and apiKeySecret must be different values always
+
+### EXPECTED OUTPUT
+- V2__add_store_password.sql
+- StoreRegistrationRequest.java
+- StoreLoginRequest.java
+- AuthResponse.java
+- JwtService.java
+- StoreAuthService.java
+- StoreAuthController.java
+- JwtAuthFilter.java
+- Updated SecurityConfig.java
+- Updated application.yml (jwt config added)
+- Updated ErrorCode enum (STORE_ALREADY_EXISTS, INVALID_CREDENTIALS)
+
+### NEXT STEP
+Prompt 5.2 will create the store profile and product management endpoints (authenticated dashboard operations).
+
+---
+
+## Prompt 5.2 — Store Profile + Product Management Endpoints
+
+### CONTEXT
+FitVision backend. JWT authentication is complete. JwtAuthFilter sets TenantContext for all /api/dashboard/** requests except /auth/**. StoreAuthService handles registration and login.
+
+Existing entities and repositories:
+- Store: id, name, email, plan, status, platform, apiKeyPublic, subscriptionStatus
+- Product: id, brandId, tenantId, externalProductId, name, category, genderTarget
+- Brand: id, tenantId, name, slug, source
+- ProductRepository: findByIdAndTenantId, findAllByTenantId, findByExternalProductIdAndTenantId
+- BrandRepository: findAllByTenantIdOrTenantIdIsNull, findByIdAndTenantIdOrTenantIdIsNull
+
+### OBJECTIVE
+Create store profile and product management endpoints.
+
+**StoreProfileResponse** (DTO)
+- Package: com.fitvision.api.dashboard.store
+- Fields: UUID id, String name, String email, String plan, String platform, String apiKeyPublic, String subscriptionStatus
+
+**UpdateStoreProfileRequest** (DTO)
+- Fields: name (nullable — only update if provided), platform (nullable)
+- Do NOT allow email or API keys to be changed via this endpoint
+
+**ProductRequest** (DTO — used for both create and update)
+- Package: com.fitvision.api.dashboard.product
+- Fields: externalProductId (@NotBlank), name (@NotBlank), category (String), genderTarget (String), brandId (UUID, nullable)
+
+**ProductResponse** (DTO)
+- Fields: UUID id, String externalProductId, String name, String category, String genderTarget, UUID brandId, String brandName, boolean hasSizeChart
+
+**StoreController** (@RestController)
+- Package: com.fitvision.api.dashboard.store
+- Base path: /api/dashboard/v1/store
+- GET /profile → returns StoreProfileResponse for authenticated store
+- PATCH /profile → updates name and/or platform, returns updated StoreProfileResponse
+- GET /api-keys → returns apiKeyPublic and apiKeySecret (only endpoint that exposes secret key)
+- POST /api-keys/regenerate → generates new apiKeyPublic and apiKeySecret, invalidates old ones, returns new keys
+
+**ProductController** (@RestController)
+- Package: com.fitvision.api.dashboard.product
+- Base path: /api/dashboard/v1/products
+
+Endpoints:
+- GET / → returns List<ProductResponse> for authenticated store, includes hasSizeChart flag
+- POST / → creates product, returns ProductResponse (HTTP 201)
+- GET /{productId} → returns single ProductResponse
+- PUT /{productId} → full update, returns ProductResponse
+- DELETE /{productId} → soft delete (add deleted_at column via V3 migration), returns HTTP 204
+
+**ProductService** (@Service)
+- Package: com.fitvision.domain.product
+- Handles CRUD with tenant isolation
+- hasSizeChart computed by checking if active SizeChart exists for product
+- On create: if brandId provided, validate it belongs to tenant or is global
+- On delete: if product has active size chart, deactivate it first
+
+**V3__add_product_soft_delete.sql:**
+- ALTER TABLE products ADD COLUMN deleted_at TIMESTAMP NULL;
+- Update ProductRepository queries to exclude deleted_at IS NOT NULL
+
+### CONSTRAINTS
+- All endpoints read tenantId from TenantContext — never from request body
+- Regenerating API keys must invalidate the old public key immediately (widget calls with old key must start returning 401)
+- hasSizeChart must not trigger N+1 — use a single query or batch check
+- Soft deleted products must not appear in any list or be accessible by productId
+
+### EXPECTED OUTPUT
+- V3__add_product_soft_delete.sql
+- StoreProfileResponse.java
+- UpdateStoreProfileRequest.java
+- ProductRequest.java
+- ProductResponse.java
+- StoreController.java
+- ProductController.java
+- ProductService.java
+- Updated ProductRepository.java (exclude soft-deleted)
+
+### NEXT STEP
+Prompt 5.3 will create the analytics endpoints and integration tests for all Phase 5 endpoints.
+
+---
+
+## Prompt 5.3 — Analytics Endpoints + Phase 5 Tests
+
+### CONTEXT
+FitVision backend. JWT auth, store profile, and product management are complete. RecommendationRequestRepository has: countByTenantIdAndCreatedAtAfter and findAllByTenantId(pageable).
+
+### OBJECTIVE
+Create analytics endpoints and full test coverage for Phase 5.
+
+**AnalyticsResponse** (DTO)
+- Package: com.fitvision.api.dashboard.analytics
+- Fields:
+  - totalRecommendations (long)
+  - recommendationsLast30Days (long)
+  - averageConfidenceScore (double)
+  - qualityDistribution (Map<String, Long> — EXACT/PARTIAL/CLOSEST/NO_MATCH counts)
+  - topProducts (List<ProductRecommendationStat> — top 5 products by recommendation count)
+
+**ProductRecommendationStat** (DTO)
+- Fields: UUID productId, String productName, long recommendationCount, double averageConfidence
+
+**AnalyticsController** (@RestController)
+- Package: com.fitvision.api.dashboard.analytics
+- Base path: /api/dashboard/v1/analytics
+- GET /summary → returns AnalyticsResponse for authenticated store
+- GET /recommendations → paginated list of RecommendationRequest records (page, size params)
+
+**AnalyticsService** (@Service)
+- Package: com.fitvision.domain.recommendation
+- Aggregates data from RecommendationRequestRepository
+- Add necessary @Query methods to RecommendationRequestRepository:
+  - findAverageConfidenceByTenantId(UUID tenantId): Double
+  - countByTenantIdAndQuality(UUID tenantId, String quality): long
+  - findTopProductsByTenantId(UUID tenantId, Pageable pageable): List<Object[]>
+
+**Tests:**
+
+StoreAuthControllerIT (integration):
+- POST /register → 200, returns JWT and apiKeyPublic
+- POST /register duplicate email → 409 STORE_ALREADY_EXISTS
+- POST /login valid credentials → 200, returns JWT
+- POST /login wrong password → 401 INVALID_CREDENTIALS
+- POST /login unknown email → 401 INVALID_CREDENTIALS (same message as wrong password)
+
+StoreControllerIT (integration):
+- GET /profile without JWT → 401
+- GET /profile with valid JWT → 200, correct store data
+- PATCH /profile → 200, name updated
+- GET /api-keys → 200, returns both keys
+- POST /api-keys/regenerate → 200, old widget calls with old key return 401
+
+ProductControllerIT (integration):
+- Full CRUD cycle: create → get → update → delete → get returns 404
+- GET / returns hasSizeChart=true after upload, false before
+- DELETE soft-deleted product disappears from list
+- Cross-tenant: cannot access other store's product → 404
+
+AnalyticsControllerIT (integration):
+- GET /summary after several recommendation requests → counts correct
+- GET /recommendations paginated → correct page size and total
+
+### CONSTRAINTS
+- findTopProductsByTenantId must use JPQL, not native SQL
+- Analytics queries must not load full entities — use projections or Object[] results
+- All integration tests extend AbstractIntegrationTest
+
+### EXPECTED OUTPUT
+- AnalyticsResponse.java
+- ProductRecommendationStat.java
+- AnalyticsController.java
+- AnalyticsService.java
+- Updated RecommendationRequestRepository.java
+- StoreAuthControllerIT.java
+- StoreControllerIT.java
+- ProductControllerIT.java
+- AnalyticsControllerIT.java
+
+### PHASE 5 COMPLETION CHECKLIST
+Before moving to Phase 6, verify:
+- [ ] All tests pass (mvn verify) — target: 90+ tests
+- [ ] Store can register, login, and receive JWT
+- [ ] JWT protects all /api/dashboard/** except /auth/**
+- [ ] Store can create and manage products
+- [ ] Soft delete works — deleted products invisible in all queries
+- [ ] API key regeneration immediately invalidates old widget calls
+- [ ] Analytics summary returns correct counts after recommendations
+- [ ] Full end-to-end: register → login → create product → upload size chart → widget recommendation → analytics shows the event
+
+# FitVision — Phase 6 Prompts: Embeddable Widget (Vanilla JS)
+
+> Pre-condition: Phase 5 complete. Backend API fully operational. POST /api/widget/v1/size-recommendation returns recommendation with confidenceScore, quality, confidenceLabel, message, hasSizeChart. API key authentication via X-FitVision-Key header.
+
+---
+
+## Prompt 6.1 — Project Setup (Vite + Vanilla JS)
+
+### CONTEXT
+We are building the FitVision embeddable widget — a lightweight Vanilla JavaScript file that store owners paste into their store via a single `<script>` tag. It must work on Shopify, WooCommerce, Wix, and any HTML-based store without conflicts with the store's own libraries.
+
+The widget:
+- Initialises from a data attribute on a `<div>` element: `data-fitvision-product-id`
+- Calls POST /api/widget/v1/size-recommendation on the FitVision backend
+- Displays the recommendation inline on the product page
+- Must never block the store's page render (async/deferred)
+- Must stay under 50KB gzipped
+- Must not use any frontend framework (no React, Vue, Angular)
+- Must not pollute the global scope beyond `window.FitVision`
+- Must not set cookies
+
+The widget lives in a separate directory from the Spring Boot backend:
+```
+/widget
+  ├── src/
+  │   ├── main.js          # entry point
+  │   ├── api.js           # API call logic
+  │   ├── ui.js            # DOM rendering
+  │   ├── styles.css       # scoped styles
+  │   └── config.js        # constants and defaults
+  ├── index.html           # local dev test page
+  ├── vite.config.js
+  └── package.json
+```
+
+### OBJECTIVE
+Set up the Vite project for the widget with correct build configuration.
+
+**package.json**
+- name: fitvision-widget
+- scripts: dev (vite), build (vite build), preview (vite preview)
+- devDependencies: vite (latest stable)
+- No runtime dependencies
+
+**vite.config.js**
+- Build mode: library
+- Entry: src/main.js
+- Output format: iife (Immediately Invoked Function Expression — required for script tag embed)
+- Output filename: fitvision-widget.min.js
+- Global name: FitVision
+- Minify: true
+- CSS: inline into the JS bundle (cssCodeSplit: false) — single file output
+- Target: es2017 (broad browser support)
+- No external dependencies
+
+**config.js**
+```javascript
+// All configurable constants
+export const API_BASE_URL = 'https://api.fitvision.io'; // overridable via data attribute
+export const DEFAULT_TIMEOUT_MS = 8000;
+export const WIDGET_VERSION = '1.0.0';
+export const NAMESPACE = 'fitvision';
+```
+
+**index.html** (local dev test page only — not part of build output)
+- Loads the widget script
+- Has a div with data-fitvision-product-id="test-product-123" and data-fitvision-key="test-api-key"
+- Has a mock server note explaining how to test locally
+
+### CONSTRAINTS
+- Output must be a single .js file — no separate CSS file
+- iife format ensures the widget works via plain `<script src="...">` tag
+- No TypeScript — Vanilla JS only for this phase
+- vite.config.js must explicitly set rollupOptions.output.manualChunks to undefined to prevent code splitting
+
+### EXPECTED OUTPUT
+- /widget/package.json
+- /widget/vite.config.js
+- /widget/src/config.js
+- /widget/index.html (dev test page)
+
+### NEXT STEP
+Prompt 6.2 will implement the widget initialisation logic, DOM injection, and API integration.
+
+---
+
+## Prompt 6.2 — Widget Core (Init + API + UI)
+
+### CONTEXT
+FitVision widget project is set up with Vite, iife build, single file output. The widget must:
+
+1. Find all `<div data-fitvision-product-id="...">` elements on the page
+2. For each, inject a "Find my size" button
+3. When clicked, show a form asking for height, weight, gender (optional), age (optional)
+4. On submit, call POST /api/widget/v1/size-recommendation
+5. Display the recommendation result inline
+
+API endpoint: POST /api/widget/v1/size-recommendation
+Request headers: X-FitVision-Key: {apiKey}, Content-Type: application/json
+Request body:
+```json
+{
+  "externalProductId": "string",
+  "heightCm": 175,
+  "weightKg": 70,
+  "gender": "MALE",
+  "age": 30,
+  "storeBodyData": false
+}
+```
+Response envelope:
+```json
+{
+  "success": true,
+  "data": {
+    "recommendedSize": "M",
+    "confidenceScore": 0.95,
+    "quality": "EXACT",
+    "productName": "Classic T-Shirt",
+    "hasSizeChart": true,
+    "confidenceLabel": "High",
+    "message": "Based on your measurements, we recommend size M."
+  }
+}
+```
+
+Data attributes the store owner sets on the container div:
+- data-fitvision-product-id (required) — the externalProductId
+- data-fitvision-key (required) — the store's public API key
+- data-fitvision-api-url (optional) — override for API base URL (for testing)
+- data-fitvision-locale (optional) — "en" or "pt" (default: "en")
+
+### OBJECTIVE
+Implement the three core modules.
+
+**api.js**
+- Single exported function: `async function getRecommendation(apiKey, payload, apiBaseUrl)`
+- Uses fetch() with timeout (AbortController, DEFAULT_TIMEOUT_MS)
+- Returns the parsed response data object on success
+- Throws a typed error on failure:
+  - NetworkError: fetch failed or timed out
+  - ApiError: API returned success=false (include error.code and error.message)
+- Never throws unhandled exceptions — always returns or throws a typed error
+
+**ui.js**
+Exported functions:
+
+`renderTrigger(container)` — injects the "Find my size" button into the container
+- Button text: "Find my size" (en) / "Encontrar o meu tamanho" (pt)
+- Styled with inline CSS scoped to the fitvision namespace
+- Clicking the button calls renderForm()
+
+`renderForm(container, onSubmit)` — replaces trigger with measurement input form
+- Fields: Height (cm), Weight (kg), Gender (select: Male/Female/Prefer not to say), Age (optional)
+- Submit button: "Get my size" / "Obter o meu tamanho"
+- Back link to return to trigger
+- Client-side validation: height 50-250, weight 20-300, required fields
+- On valid submit: calls renderLoading(), then calls onSubmit(formData)
+
+`renderLoading(container)` — shows a loading state while API call is in progress
+- Simple spinner or text: "Finding your size..." / "A encontrar o seu tamanho..."
+
+`renderResult(container, data)` — displays the recommendation
+- If hasSizeChart=false: shows fallback message, no size displayed
+- If quality=NO_MATCH: shows low-confidence fallback message
+- Otherwise: shows recommended size prominently, confidence label, and message from API
+- "Try again" link to restart the form
+
+`renderError(container, error)` — displays error state
+- NetworkError: "Could not connect. Please try again." / PT equivalent
+- ApiError: shows the error message from API
+- "Try again" link
+
+**main.js** (entry point)
+- Auto-initialises on DOMContentLoaded
+- Finds all elements with [data-fitvision-product-id]
+- For each element:
+  - Reads data attributes (productId, apiKey, apiBaseUrl, locale)
+  - Validates required attributes — logs warning and skips if missing
+  - Calls renderTrigger(element)
+  - Sets up the full flow: trigger → form → loading → api call → result/error
+- Exposes window.FitVision.init() for manual reinitialisation (useful for SPAs)
+
+### CONSTRAINTS
+- Zero external dependencies — fetch, AbortController, and DOM APIs only
+- All CSS must be scoped with .fitvision- prefix to avoid conflicts with store styles
+- No cookies, no localStorage, no sessionStorage
+- Gender "Prefer not to say" maps to "UNISEX" in the API payload
+- storeBodyData always false (GDPR — buyers do not consent in this flow)
+- Widget must work if multiple product divs exist on the same page
+- Must not throw errors that bubble to window.onerror and pollute store's error tracking
+
+### EXPECTED OUTPUT
+- /widget/src/api.js
+- /widget/src/ui.js
+- /widget/src/main.js
+
+### NEXT STEP
+Prompt 6.3 will add styling, accessibility, and the build + manual test validation.
+
+---
+
+## Prompt 6.3 — Styles + Accessibility + Build Validation
+
+### CONTEXT
+FitVision widget. Core logic is complete (api.js, ui.js, main.js). The widget renders a trigger button, form, loading state, result, and error state. CSS is inlined into the JS bundle via Vite.
+
+### OBJECTIVE
+Add professional styling, accessibility attributes, and validate the build output.
+
+**styles.css**
+Design requirements:
+- All selectors prefixed with .fitvision- to avoid conflicts
+- Clean, minimal design that works on any store background (white/light default)
+- Trigger button: clean bordered button, neutral colours, hover state
+- Form: label above input, clear spacing, visible focus states
+- Loading: subtle animation (CSS keyframe, no JS animation library)
+- Result: size label displayed large and prominent (48px+), confidence label as a badge
+- Error: red-tinted background, clear message
+- Responsive: works on mobile (min-width: 320px) and desktop
+- No fixed widths — adapts to container width
+- Font: inherit from store (font-family: inherit)
+
+Accessibility requirements (add to ui.js):
+- All form inputs have associated `<label>` with for/id
+- Submit button has type="submit"
+- Loading state has role="status" and aria-live="polite"
+- Result container has role="region" and aria-label="Size recommendation"
+- Error container has role="alert"
+- Form has aria-describedby pointing to any validation error messages
+- All interactive elements are keyboard navigable
+
+**Build validation**
+After `npm run build`:
+- Output file exists: /widget/dist/fitvision-widget.min.js
+- File size must be under 50KB gzipped — add a build check script
+- Verify the output is valid IIFE format (starts with `(function(` or equivalent)
+
+**build-check.js** (Node.js script, run after build)
+```
+node build-check.js
+```
+- Reads /widget/dist/fitvision-widget.min.js
+- Checks gzipped size < 50KB
+- Logs: "✓ Build OK — {size}KB gzipped" or "✗ Build too large — {size}KB gzipped"
+
+**Updated package.json scripts:**
+```json
+{
+  "build": "vite build && node build-check.js",
+  "build:watch": "vite build --watch"
+}
+```
+
+**Local integration test (index.html update)**
+Update index.html to:
+- Load the built widget from /dist/fitvision-widget.min.js (not dev server)
+- Include a mock fetch interceptor that returns a realistic API response without hitting the real backend
+- Document at the top: "To test against real backend, replace MOCK_MODE=true with real API key and product ID"
+
+### CONSTRAINTS
+- No CSS framework (no Tailwind, no Bootstrap) — plain CSS only
+- CSS animations must respect prefers-reduced-motion media query
+- Widget must render correctly when the store uses a CSS reset
+- Build check must exit with code 1 if size exceeds 50KB so CI can catch it
+
+### EXPECTED OUTPUT
+- /widget/src/styles.css
+- Updated /widget/src/ui.js (accessibility attributes added)
+- /widget/build-check.js
+- Updated /widget/package.json (build script updated)
+- Updated /widget/index.html (mock mode + built file)
+
+### PHASE 6 COMPLETION CHECKLIST
+Before moving to Phase 7, verify:
+- [ ] npm run build completes without errors
+- [ ] build-check.js reports under 50KB gzipped
+- [ ] Output is a single .js file in /widget/dist/
+- [ ] index.html loads the widget in mock mode and the full flow works: trigger → form → loading → result
+- [ ] Widget initialises correctly on a div with data attributes
+- [ ] Form validates height and weight ranges before submitting
+- [ ] Result displays recommendedSize prominently with confidenceLabel
+- [ ] Fallback message shown when hasSizeChart=false
+- [ ] Error state shown when API call fails
+- [ ] All form inputs are keyboard navigable
+- [ ] No JS errors in browser console during the full flow
+- [ ] Widget does not conflict when two product divs exist on the same page

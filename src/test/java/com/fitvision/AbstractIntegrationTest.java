@@ -5,7 +5,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
@@ -28,12 +27,17 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @ActiveProfiles("test")
 public abstract class AbstractIntegrationTest {
 
-    @Container
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:16")
-                    .withDatabaseName("fitvision")
+                    .withDatabaseName("fitvision_test")
                     .withUsername("fitvision")
                     .withPassword("fitvision");
+
+    static {
+        // Keep a single DB container for the whole JVM to avoid pool reconnection issues
+        // between different integration test classes.
+        POSTGRES.start();
+    }
 
     /**
      * Injects the Testcontainer's dynamic JDBC coordinates into the Spring
