@@ -4,6 +4,7 @@ import type {
   ApiEnvelope,
   ApiKeys,
   AuthResponse,
+  Brand,
   LoginRequest,
   Product,
   ProductRequest,
@@ -137,6 +138,49 @@ export const api = {
 
   getProducts(): Promise<Product[]> {
     return request<Product[]>('/api/dashboard/v1/products');
+  },
+
+  getBrands(): Promise<Brand[]> {
+    return request<Brand[]>('/api/dashboard/v1/brands');
+  },
+
+  createBrand(name: string): Promise<Brand> {
+    return request<Brand>('/api/dashboard/v1/brands', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    });
+  },
+
+  async deleteBrand(brandId: string): Promise<void> {
+    const token = getToken();
+    const headers = new Headers();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/dashboard/v1/brands/${brandId}`, {
+      method: 'DELETE',
+      headers,
+      cache: 'no-store'
+    });
+
+    if (response.status === 401) {
+      handleUnauthorized();
+      throw new ApiError('Unauthorized. Please login again.', 401, 'UNAUTHORIZED');
+    }
+
+    if (!response.ok) {
+      let payload: ApiEnvelope<null> | null = null;
+      try {
+        payload = (await response.json()) as ApiEnvelope<null>;
+      } catch {
+        payload = null;
+      }
+
+      const message = payload?.error?.message || 'Unable to delete brand.';
+      const code = payload?.error?.code || 'HTTP_ERROR';
+      throw new ApiError(message, response.status, code);
+    }
   },
 
   createProduct(payload: ProductRequest): Promise<Product> {

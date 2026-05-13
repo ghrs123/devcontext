@@ -62,6 +62,14 @@ export interface Product {
   hasSizeChart: boolean;
 }
 
+export interface Brand {
+  id: string;
+  name: string;
+  slug: string;
+  source: 'store_uploaded' | 'fitvision_managed';
+  isGlobal: boolean;
+}
+
 export interface ProductRequest {
   externalProductId: string;
   name: string;
