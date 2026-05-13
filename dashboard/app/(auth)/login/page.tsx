@@ -9,6 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 
 import { api, ApiError } from '@/lib/api';
 import { saveToken } from '@/lib/auth';
+import { getRoleFromToken } from '@/lib/jwt';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -38,7 +39,8 @@ export default function LoginPage() {
       setSubmitError(null);
       const response = await api.login(values);
       saveToken(response.accessToken);
-      router.push('/dashboard');
+      const role = getRoleFromToken(response.accessToken);
+      router.push(role === 'ADMIN' ? '/admin/dashboard' : '/dashboard');
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Login failed. Please try again.';
       setSubmitError(message);

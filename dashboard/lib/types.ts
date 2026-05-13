@@ -112,3 +112,70 @@ export interface AnalyticsSummary {
   qualityDistribution: Record<string, number>;
   topProducts: ProductRecommendationStat[];
 }
+
+export interface SpringPage<T> {
+  content: T[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface AdminBrandRecommendationStat {
+  brandId: string | null;
+  brandName: string;
+  recommendationCount: number;
+  averageConfidence: number;
+}
+
+export interface AdminMetrics {
+  totalStores: number;
+  activeStores: number;
+  totalRecommendations: number;
+  recommendationsLast30Days: number;
+  averageConfidenceScore: number;
+  qualityDistribution: Record<string, number>;
+  topBrands: AdminBrandRecommendationStat[];
+}
+
+export interface StoreAdminView {
+  id: string;
+  name: string;
+  email: string;
+  plan: string;
+  role: string;
+  status: 'ACTIVE' | 'INACTIVE' | string;
+  platform: string;
+  createdAt: string;
+  totalProducts: number;
+  totalRecommendations: number;
+  lastRecommendationAt: string | null;
+}
+
+export interface AdminRecommendation {
+  id: string;
+  tenantId: string;
+  storeName: string;
+  productId: string;
+  productName: string;
+  recommendedSize: string;
+  confidenceScore: number;
+  quality: 'EXACT' | 'PARTIAL' | 'CLOSEST' | 'NO_MATCH' | string;
+  createdAt: string;
+}
+
+export interface GlobalBrandSizeChartVersion {
+  id: string;
+  version: number;
+  active: boolean;
+  source: string;
+  createdAt: string;
+}
+
+export interface AdminRecommendationFilters {
+  tenantId?: string;
+  productId?: string;
+  quality?: string;
+}

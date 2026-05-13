@@ -1,13 +1,19 @@
 import { clearToken, getToken } from '@/lib/auth';
 import type {
+  AdminMetrics,
+  AdminRecommendation,
+  AdminRecommendationFilters,
   AnalyticsSummary,
   ApiEnvelope,
   ApiKeys,
   AuthResponse,
   Brand,
+  GlobalBrandSizeChartVersion,
   LoginRequest,
   Product,
   ProductRequest,
+  SpringPage,
+  StoreAdminView,
   RegisterRequest,
   SizeChartUploadResult,
   SizeEntryData,
@@ -44,6 +50,10 @@ async function parseEnvelope<T>(response: Response): Promise<T> {
     payload = null;
   }
 
+  if (response.status === 204) {
+    return null as T;
+  }
+
   if (response.status === 401) {
     handleUnauthorized();
     throw new ApiError('Unauthorized. Please login again.', 401, 'UNAUTHORIZED');
@@ -56,6 +66,9 @@ async function parseEnvelope<T>(response: Response): Promise<T> {
   }
 
   if (!payload?.success || payload.data === null) {
+    if (payload === null && response.ok) {
+      return null as T;
+    }
     const message = payload?.error?.message || 'Unexpected API response.';
     const code = payload?.error?.code || 'INVALID_API_RESPONSE';
     throw new ApiError(message, response.status, code);
@@ -235,5 +248,97 @@ export const api = {
 
   getAnalyticsSummary(): Promise<AnalyticsSummary> {
     return request<AnalyticsSummary>('/api/dashboard/v1/analytics/summary');
+  },
+
+  adminGetMetrics(): Promise<AdminMetrics> {
+    return request<AdminMetrics>('/api/admin/v1/metrics');
+  },
+
+  adminGetStores(page = 0, size = 20, status = 'ACTIVE', search = ''): Promise<SpringPage<StoreAdminView>> {
+    const params = new URLSearchParams({
+      page: String(page),
+      size: String(size),
+      status,
+      search
+    });
+    return request<SpringPage<StoreAdminView>>(`/api/admin/v1/stores?${params.toString()}`);
+  },
+
+  adminGetStore(storeId: string): Promise<StoreAdminView> {
+    return request<StoreAdminView>(`/api/admin/v1/stores/${storeId}`);
+  },
+
+  adminUpdateStoreStatus(storeId: string, status: 'ACTIVE' | 'INACTIVE'): Promise<StoreAdminView> {
+    return request<StoreAdminView>(`/api/admin/v1/stores/${storeId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+  },
+
+  adminGetBrands(): Promise<Brand[]> {
+    return request<Brand[]>('/api/admin/v1/brands');
+  },
+
+  adminCreateBrand(name: string): Promise<Brand> {
+    return request<Brand>('/api/admin/v1/brands', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    });
+  },
+
+  adminUpdateBrand(brandId: string, name: string): Promise<Brand> {
+    return request<Brand>(`/api/admin/v1/brands/${brandId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name })
+    });
+  },
+
+  async adminDeleteBrand(brandId: string): Promise<void> {
+    await request<null>(`/api/admin/v1/brands/${brandId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  adminUploadGlobalSizeChart(brandId: string, file: File): Promise<SizeChartUploadResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return request<SizeChartUploadResult>(`/api/admin/v1/brands/${brandId}/size-charts/upload`, {
+      method: 'POST',
+      body: formData
+    });
+  },
+
+  adminGetGlobalBrandSizeCharts(brandId: string): Promise<GlobalBrandSizeChartVersion[]> {
+    return request<GlobalBrandSizeChartVersion[]>(`/api/admin/v1/brands/${brandId}/size-charts`);
+  },
+
+  async adminDeactivateGlobalBrandActiveSizeChart(brandId: string): Promise<void> {
+    await request<null>(`/api/admin/v1/brands/${brandId}/size-charts/active`, {
+      method: 'DELETE'
+    });
+  },
+
+  adminGetRecommendations(
+    page = 0,
+    size = 20,
+    filters: AdminRecommendationFilters = {}
+  ): Promise<SpringPage<AdminRecommendation>> {
+    const params = new URLSearchParams({
+      page: String(page),
+      size: String(size)
+    });
+
+    if (filters.tenantId) {
+      params.set('tenantId', filters.tenantId);
+    }
+    if (filters.productId) {
+      params.set('productId', filters.productId);
+    }
+    if (filters.quality) {
+      params.set('quality', filters.quality);
+    }
+
+    return request<SpringPage<AdminRecommendation>>(`/api/admin/v1/recommendations?${params.toString()}`);
   }
 };
