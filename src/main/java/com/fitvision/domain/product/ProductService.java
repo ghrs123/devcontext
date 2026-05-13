@@ -7,6 +7,7 @@ import com.fitvision.domain.sizechart.SizeChartService;
 import com.fitvision.infrastructure.persistence.BrandRepository;
 import com.fitvision.infrastructure.persistence.ProductRepository;
 import com.fitvision.infrastructure.persistence.SizeChartRepository;
+import com.fitvision.shared.exception.BrandNotFoundException;
 import com.fitvision.shared.exception.ErrorCode;
 import com.fitvision.shared.exception.FitVisionException;
 import com.fitvision.shared.exception.ProductNotFoundException;
@@ -76,12 +77,29 @@ public class ProductService {
                             "A product with externalProductId '" + externalProductId + "' already exists.");
                 });
 
-        UUID brandId = resolveBrandId(tenantId, request.getBrandId());
-
         Product product = new Product();
         product.setId(UUID.randomUUID());
         product.setTenantId(tenantId);
-        product.setBrandId(brandId);
+        UUID fallbackBrandId = brandRepository.findAllByTenantIdOrTenantIdIsNull(tenantId)
+            .stream()
+            .findFirst()
+            .map(Brand::getId)
+            .orElse(null);
+        product.setBrandId(fallbackBrandId);
+
+        if (request.getBrandId() != null) {
+            Brand brand = brandRepository
+                .findByIdAndTenantIdOrTenantIdIsNull(request.getBrandId(), tenantId)
+                .orElseThrow(() -> new BrandNotFoundException(
+                    "Brand " + request.getBrandId() + " not found for tenant " + tenantId));
+            product.setBrand(brand);
+        }
+
+        if (product.getBrandId() == null) {
+            throw new FitVisionException(ErrorCode.VALIDATION_ERROR,
+                "brandId is required when no brand is available for this tenant.");
+        }
+
         product.setExternalProductId(externalProductId);
         product.setName(request.getName().trim());
         product.setCategory(normalizeOrDefault(request.getCategory(), DEFAULT_CATEGORY));
@@ -110,9 +128,14 @@ public class ProductService {
                     }
                 });
 
-        UUID brandId = resolveBrandId(tenantId, request.getBrandId());
+        if (request.getBrandId() != null) {
+            Brand brand = brandRepository
+                .findByIdAndTenantIdOrTenantIdIsNull(request.getBrandId(), tenantId)
+                .orElseThrow(() -> new BrandNotFoundException(
+                    "Brand " + request.getBrandId() + " not found for tenant " + tenantId));
+            existing.setBrand(brand);
+        }
 
-        existing.setBrandId(brandId);
         existing.setExternalProductId(externalProductId);
         existing.setName(request.getName().trim());
         existing.setCategory(normalizeOrDefault(request.getCategory(), DEFAULT_CATEGORY));
@@ -138,22 +161,6 @@ public class ProductService {
         existing.setDeletedAt(LocalDateTime.now());
         existing.setUpdatedAt(LocalDateTime.now());
         productRepository.save(existing);
-    }
-
-    private UUID resolveBrandId(UUID tenantId, UUID requestedBrandId) {
-        if (requestedBrandId != null) {
-            Brand brand = brandRepository.findByIdAndTenantIdOrTenantIdIsNull(requestedBrandId, tenantId)
-                    .orElseThrow(() -> new FitVisionException(ErrorCode.BRAND_NOT_FOUND,
-                            "Brand " + requestedBrandId + " not found for tenant " + tenantId));
-            return brand.getId();
-        }
-
-        return brandRepository.findAllByTenantIdOrTenantIdIsNull(tenantId)
-                .stream()
-                .findFirst()
-                .map(Brand::getId)
-                .orElseThrow(() -> new FitVisionException(ErrorCode.BRAND_NOT_FOUND,
-                        "No brand available for this tenant. Create a brand first."));
     }
 
     private Map<UUID, String> loadBrandNames(UUID tenantId) {

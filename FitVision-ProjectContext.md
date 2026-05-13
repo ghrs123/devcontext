@@ -397,7 +397,7 @@ sizeChartRepository.findById(id);
 # FitVision — Build Progress
 
 ## Current Status
-Phase 7 — Complete. Store dashboard fully implemented (Next.js 14, auth, products, size charts, analytics, settings). Backend running in Docker. Full end-to-end flow validated in browser. Known issues identified and queued for Phase A fixes before Phase 8.
+Phase A — In progress. Phases 1–7 complete. Backend running in Docker. Dashboard running at localhost:3000. Two critical fixes being applied: SecretKeyAuthFilter scope and brandId optional. Real-world testing started with Zara size chart data.
 
 ## What Has Been Built
 
@@ -405,7 +405,7 @@ Phase 7 — Complete. Store dashboard fully implemented (Next.js 14, auth, produ
 - 80+ production classes
 - 77 tests passing (45 unit + 32 integration)
 - 3 Flyway migrations (V1, V2, V3)
-- Running in Docker via docker-compose
+- Running in Docker via docker-compose (must rebuild manually after code changes)
 
 ### Widget (Vanilla JS + Vite)
 - Single JS file: fitvision-widget.min.js (4.32KB gzipped)
@@ -479,160 +479,145 @@ Phase 7 — Complete. Store dashboard fully implemented (Next.js 14, auth, produ
 - Running at localhost:3000
 
 ## Current Phase
-Phase A — Critical Fixes (must complete before Phase 8)
+Phase A — Critical Fixes
 
-## Known Issues (to fix in Phase A)
+## Phase A Status
 
-### Issue 1 — SecretKeyAuthFilter blocking dashboard routes
-SecretKeyAuthFilter intercepts all /api/dashboard/** instead of only /api/dashboard/v1/size-charts/**
-Fix: add shouldNotFilter() to SecretKeyAuthFilter scoping it to /api/dashboard/v1/size-charts/ only
+### Fix A1a — SecretKeyAuthFilter scope ⏳ IN PROGRESS
+- Problem: SecretKeyAuthFilter intercepts ALL /api/dashboard/** causing slow pages and blocked requests
+- Fix: Add shouldNotFilter() scoping filter to /api/dashboard/v1/size-charts/ only
+- Status: Fix written, pending Docker rebuild
 
-### Issue 2 — brandId required when creating products
-ProductService throws BRAND_NOT_FOUND when no brand exists for tenant
-Fix: make brandId truly optional — product can be created without a brand
+### Fix A1b — brandId optional in ProductService ⏳ IN PROGRESS
+- Problem: ProductService throws BRAND_NOT_FOUND when no brand exists, blocking product creation
+- Fix: brandId null = create product without brand (valid scenario)
+- Status: Fix written, pending Docker rebuild
 
-### Issue 3 — No brand management UI
-Store owners cannot create or manage brands from the dashboard
-Fix: add brand management section to the Products page (create brand inline when adding product)
+### Fix A2 — Brand management UI 🔲 PENDING
+- Problem: Store owners cannot create brands from dashboard — must use curl
+- Fix: Add brand selector to ProductForm + brand management section in Products page
+- Blocked by: A1b must be applied first
 
-### Issue 4 — No admin area
-No way for FitVision operator to manage tenants, global brands, or platform metrics
-Fix: implement Phase A3 — Admin Area
+### Fix A3 — Admin area backend 🔲 PENDING
+- Implement /api/admin/v1/** endpoints
+- Role-based JWT (STORE | ADMIN)
+- Seed script for first admin account
 
-### Issue 5 — Swagger/OpenAPI not configured
-No API documentation available for developers
-Fix: add springdoc-openapi dependency and configure SecurityConfig to permit /swagger-ui/**
+### Fix A4 — Admin area frontend 🔲 PENDING
+- /admin route group in Next.js
+- Stores list, global brands, platform metrics
 
-### Issue 6 — Docker image not auto-rebuilt on code changes
-Developer must manually run docker compose down + mvn package + docker compose up --build
-Fix: document the rebuild workflow clearly; consider docker compose watch for development
+### Fix A5 — Swagger/OpenAPI 🔲 PENDING
+- Add springdoc-openapi-starter-webmvc-ui
+- Permit /swagger-ui/** in SecurityConfig
+
+## Docker Rebuild Workflow
+Every time backend code changes, run:
+```bash
+docker compose down
+mvn clean package -DskipTests
+docker compose up --build -d
+docker logs devcontext-fitvision-backend-1 --tail 30
+```
 
 ## Remaining Phases
 
-### Phase A — Critical Fixes (next to execute)
-
-**A1 — Backend fixes (immediate)**
-- Make brandId optional in ProductService
-- Add shouldNotFilter() to SecretKeyAuthFilter
-- Add Swagger/OpenAPI
-- V4 migration: add role column to stores (STORE | ADMIN)
-- Add seed script to create first admin account
-
-**A2 — Brand management UI**
-- BrandController: GET /brands, POST /brands (tenant-scoped)
-- Brand selector in ProductForm (create new brand inline or select existing)
-- Global brands (FitVision-managed, tenant_id = null) visible to all stores
-
-**A3 — Admin Area Backend**
-- AdminAuthFilter: JWT valid + role = ADMIN
-- GET /api/admin/stores — list all tenants with metrics
-- PATCH /api/admin/stores/{id}/status — activate/deactivate tenant
-- GET /api/admin/metrics — platform-wide metrics
-- GET/POST /api/admin/brands — manage global brands
-- POST /api/admin/brands/{id}/size-charts — upload global size charts
-- GET /api/admin/recommendations — platform-wide recommendation log
-
-**A4 — Admin Area Frontend**
-- Separate route group /admin in Next.js dashboard
-- Stores list: name, email, plan, status, registeredAt, recommendationCount
-- Toggle store active/inactive
-- Platform metrics: total stores, total recommendations, avg confidence
-- Global brands management: create brand + upload size chart
-- Admin login (same JWT, role checked client-side + server-side)
+### Phase A — Critical Fixes (current)
+See Phase A Status above.
 
 ### Phase 8 — Shopify App
-- Shopify App setup (Shopify CLI, app bridge)
-- Automatic product sync from Shopify catalogue to FitVision
-- One-click widget installation into Shopify theme
-- Webhook handlers: product created/updated/deleted
-- App Store listing preparation
-- Shopify OAuth flow
+- Shopify CLI + @shopify/shopify-api (Node.js/Express, separate /shopify-app directory)
+- OAuth flow: install → consent → callback → FitVision account link
+- Automatic product sync on install
+- Webhook handlers: products/create, products/update, products/delete
+- Widget injection via ScriptTag API or Theme App Extension
+- Embedded App UI in Shopify Admin
+- V5 migration: stores.shopify_shop, stores.shopify_access_token_encrypted
+- New backend: ShopifyController (/api/shopify/**)
 
 ### Phase 9 — Scraping Pipeline
-- Playwright scraper for major brands (Zara, H&M, Pull&Bear, Mango, C&A)
-- Scheduled re-scrape every 30 days via Spring Scheduler
-- Scrape monitoring: last_scraped_at, staleness flag after 30 days
-- Admin UI trigger: force re-scrape per brand
-- Manual override: admin can edit scraped size charts
-- Robots.txt compliance, rate limiting
-- Store scrape source URL for traceability
+- Playwright Java scraper for major brands (Zara, H&M, Pull&Bear, Mango)
+- Spring Scheduler: runs every Monday at 2am, scrapes brands older than 30 days
+- ScrapeJob entity: tracks status, pages scraped, entries found, errors
+- Admin trigger: POST /api/admin/v1/brands/{id}/scrape
+- V6 migration: scrape_jobs table, scrape_source_url on size_charts
+- Robots.txt compliance, max 1 request per 3 seconds per domain
+- BrandScraperRegistry: resolves scraper by brand slug
 
 ### Phase 10 — Billing & Subscriptions
-- Stripe integration (subscriptions)
-- Plans: Free (2 products, no export), Starter €29/mo, Pro €79/mo, Team €149/mo
+- Stripe subscriptions: Free, Starter €29/mo, Pro €79/mo, Team €149/mo
 - Stripe webhook handlers: subscription created/updated/cancelled
-- Plan enforcement: check limits before allowing product creation or recommendations
+- Plan enforcement: check limits before product creation and recommendations
 - Billing UI in store dashboard settings
 - Admin view: subscription status per store
 
 ### Phase 11 — Production Deployment
-- Railway (backend) + Vercel (dashboard) + Cloudflare (widget CDN)
-- Environment variables audit (JWT secret, DB URL, Stripe keys)
-- Neon PostgreSQL (production database, serverless)
+- Railway (backend) + Vercel (dashboard) + Cloudflare CDN (widget)
+- Neon PostgreSQL (production, serverless)
 - Cloudflare R2 (file storage for size chart uploads)
-- Resend (transactional email: welcome, API key regenerated, plan upgraded)
-- SSL, custom domain (fitvision.io, app.fitvision.io, api.fitvision.io)
-- CI/CD pipeline: GitHub Actions → build → test → deploy
+- Resend (transactional email)
+- SSL + custom domains: fitvision.io, app.fitvision.io, api.fitvision.io
+- CI/CD: GitHub Actions → build → test → deploy
+- Environment variables audit
 
 ### Phase 12 — Observability & Operations
 - Structured logging with correlation IDs
-- Health checks and uptime monitoring
-- Error alerting (Sentry or similar)
+- Sentry for error alerting
 - Performance monitoring: p95 recommendation latency
-- Admin dashboard: system health panel
-- Backup strategy for PostgreSQL
+- Admin health panel
+- PostgreSQL backup strategy
 
-## Admin Area — Detailed Specification
+## Admin Area — Full Specification
 
-### Who is the Admin
-The FitVision operator (you). Single admin account created via seed script on first deploy.
-Admin has full read/write access to all tenant data and platform configuration.
-Admin cannot be created via the public register endpoint.
-
-### Admin Levels
-
-**Level 1 — Operational (Phase A3/A4)**
-- View all registered stores (name, email, plan, status, registration date)
+### Level 1 — Operational (Phase A3/A4)
+- View all registered stores with metrics
 - Activate / deactivate any store
-- View platform-wide metrics (total stores, total recommendations, avg confidence, quality distribution)
+- Platform-wide metrics (total stores, recommendations, avg confidence)
 - Manage global brands (create, edit, upload size charts)
 - Global size charts available to all stores automatically
 
-**Level 2 — Business (Phase 10)**
+### Level 2 — Business (Phase 10)
 - View subscription status per store
-- Override plan for a store (manual upgrade/downgrade)
+- Override plan manually
 - View revenue metrics
-- Impersonate a store for support (read-only view of their data)
+- Impersonate store for support (read-only)
 
-**Level 3 — Technical (Phase 12)**
+### Level 3 — Technical (Phase 12)
 - View recommendation logs across all tenants
 - Force re-scrape per brand
-- View and manage scraping pipeline status
+- Scraping pipeline status
 - System health dashboard
 - Error log viewer per tenant
 
 ### Admin Security Rules
-- Admin JWT contains role: ADMIN claim
-- AdminAuthFilter validates JWT + role before any /api/admin/** request
-- Admin endpoints never exposed in public Swagger without authentication
-- Admin account created only via seed script — never via public API
-- All admin actions logged with admin user ID and timestamp
+- Admin JWT contains role=ADMIN claim
+- AdminAuthFilter validates JWT + role before /api/admin/**
+- Admin account created ONLY via seed script — never via /auth/register
+- Seed endpoint returns 409 if any admin already exists
+- All admin actions logged with adminStoreId and timestamp
+
+## Real-World Testing Notes
+- Zara T-Shirt Slim Fit Básica /01 size chart tested
+- CSV format validated: size_label, chest_min/max (waist/hip/height left empty for tops)
+- Peça measurements converted to body measurements: subtract 4cm min, add 2cm max
+- Brand creation currently requires curl — blocked until Fix A2
 
 ## Decisions Made
 - JWT chosen over Keycloak — simpler, no external dependency
-- Singleton Testcontainers pattern — static block starts container once per JVM
-- SecretKeyAuthFilter retained on /size-charts/** for backward compatibility with Phase 4 tests
+- Singleton Testcontainers — static block starts container once per JVM
+- SecretKeyAuthFilter retained on /size-charts/** only — backward compatible with Phase 4 tests
 - GDPR: body measurements stored as BigDecimal.ZERO when storeBodyData=false
 - Widget CSS injected into JS bundle — single file, no separate CSS
 - Token stored in localStorage + cookie mirror for Next.js middleware compatibility
-- Docker Compose used for local development; Railway for production backend
+- Docker Compose for local dev; Railway for production backend
+- brandId optional — product can exist without brand association
 
 ## Decisions Pending
-- Pricing tiers finalisation (per recommendation vs flat monthly)
-- Which brands in initial FitVision-managed database (Zara, H&M confirmed; others TBD)
-- Stripe integration timing (Phase 10, after admin area)
-- Admin seed script: password stored in .env, never committed
-- Whether to use Neon serverless or dedicated Railway PostgreSQL for production
+- Pricing tiers finalisation
+- Which brands in initial FitVision-managed database (Zara confirmed; H&M, Pull&Bear, Mango planned)
+- Stripe integration timing (Phase 10)
+- Admin seed password: stored in .env, never committed to git
+- Production database: Neon serverless vs dedicated Railway PostgreSQL
 # FitVision — Phase 1 Prompts
 
 ---

@@ -1,5 +1,6 @@
 package com.fitvision.domain.product;
 
+import com.fitvision.domain.brand.Brand;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -48,6 +49,7 @@ public class Product {
 
     public UUID getBrandId() { return brandId; }
     public void setBrandId(UUID brandId) { this.brandId = brandId; }
+    public void setBrand(Brand brand) { this.brandId = brand != null ? brand.getId() : null; }
 
     public UUID getTenantId() { return tenantId; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
