@@ -24,7 +24,7 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
                                                          @Param("tenantId") UUID tenantId);
 
     @Modifying
-    @Query("UPDATE Product p SET p.brand = NULL WHERE p.tenantId = :tenantId AND p.brand.id = :brandId AND p.deletedAt IS NULL")
+    @Query("UPDATE Product p SET p.brandId = NULL WHERE p.tenantId = :tenantId AND p.brandId = :brandId AND p.deletedAt IS NULL")
     int clearBrandAssociation(@Param("tenantId") UUID tenantId, @Param("brandId") UUID brandId);
 
     long countByTenantIdAndDeletedAtIsNull(UUID tenantId);
