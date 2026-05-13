@@ -1,5 +1,6 @@
 package com.fitvision.infrastructure.security;
 
+import com.fitvision.domain.store.StoreRole;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -40,10 +41,15 @@ public class JwtService {
     }
 
     public String generateToken(UUID storeId, String email) {
+        return generateToken(storeId, email, StoreRole.STORE.name());
+    }
+
+    public String generateToken(UUID storeId, String email, String role) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(storeId.toString())
                 .claim("email", email)
+                .claim("role", role)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(expirationSeconds)))
                 .signWith(signingKey)
@@ -65,6 +71,14 @@ public class JwtService {
 
     public String extractEmail(String token) {
         return parseClaims(token).get("email", String.class);
+    }
+
+    public String extractRole(String token) {
+        String role = parseClaims(token).get("role", String.class);
+        if (role == null || role.isBlank()) {
+            return StoreRole.STORE.name();
+        }
+        return role;
     }
 
     public long getExpirationSeconds() {

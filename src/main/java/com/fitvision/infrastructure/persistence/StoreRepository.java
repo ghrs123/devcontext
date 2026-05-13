@@ -13,4 +13,6 @@ public interface StoreRepository extends JpaRepository<Store, UUID> {
     Optional<Store> findByApiKeySecret(String apiKeySecret);
 
     Optional<Store> findByEmail(String email);
+
+    boolean existsByRole(String role);
 }

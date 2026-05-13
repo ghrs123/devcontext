@@ -80,12 +80,7 @@ public class ProductService {
         Product product = new Product();
         product.setId(UUID.randomUUID());
         product.setTenantId(tenantId);
-        UUID fallbackBrandId = brandRepository.findAllByTenantIdOrTenantIdIsNull(tenantId)
-            .stream()
-            .findFirst()
-            .map(Brand::getId)
-            .orElse(null);
-        product.setBrandId(fallbackBrandId);
+        product.setBrandId(null);
 
         if (request.getBrandId() != null) {
             Brand brand = brandRepository
@@ -93,11 +88,6 @@ public class ProductService {
                 .orElseThrow(() -> new BrandNotFoundException(
                     "Brand " + request.getBrandId() + " not found for tenant " + tenantId));
             product.setBrand(brand);
-        }
-
-        if (product.getBrandId() == null) {
-            throw new FitVisionException(ErrorCode.VALIDATION_ERROR,
-                "brandId is required when no brand is available for this tenant.");
         }
 
         product.setExternalProductId(externalProductId);
@@ -134,6 +124,8 @@ public class ProductService {
                 .orElseThrow(() -> new BrandNotFoundException(
                     "Brand " + request.getBrandId() + " not found for tenant " + tenantId));
             existing.setBrand(brand);
+        } else {
+            existing.setBrandId(null);
         }
 
         existing.setExternalProductId(externalProductId);
@@ -171,6 +163,9 @@ public class ProductService {
     }
 
     private String loadBrandNameForProduct(UUID tenantId, UUID brandId) {
+        if (brandId == null) {
+            return null;
+        }
         return brandRepository.findByIdAndTenantIdOrTenantIdIsNull(brandId, tenantId)
                 .map(Brand::getName)
                 .orElse(null);

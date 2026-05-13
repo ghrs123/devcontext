@@ -3,6 +3,7 @@ package com.fitvision.api.dashboard.product;
 import com.fitvision.domain.product.ProductService;
 import com.fitvision.infrastructure.security.TenantContext;
 import com.fitvision.shared.response.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/dashboard/v1/products")
+@Tag(name = "Dashboard")
 public class ProductController {
 
     private final ProductService productService;

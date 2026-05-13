@@ -2,6 +2,7 @@ package com.fitvision.api.dashboard;
 
 import com.fitvision.shared.exception.SizeChartNotFoundException;
 import com.fitvision.shared.response.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,6 +12,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/health")
+@Tag(name = "Dashboard")
 public class HealthController {
 
     @GetMapping

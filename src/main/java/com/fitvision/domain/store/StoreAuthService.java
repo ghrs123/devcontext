@@ -55,12 +55,13 @@ public class StoreAuthService {
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .platform(resolvePlatform(request.getPlatform()))
                 .subscriptionStatus(DEFAULT_SUBSCRIPTION_STATUS)
+                .role(StoreRole.STORE.name())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
 
         Store saved = storeRepository.save(store);
-        String accessToken = jwtService.generateToken(saved.getId(), saved.getEmail());
+            String accessToken = jwtService.generateToken(saved.getId(), saved.getEmail(), StoreRole.STORE.name());
         return new AuthResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), saved.getApiKeyPublic());
     }
 
@@ -73,7 +74,10 @@ public class StoreAuthService {
             throw new FitVisionException(ErrorCode.INVALID_CREDENTIALS, INVALID_CREDENTIALS_MESSAGE);
         }
 
-        String accessToken = jwtService.generateToken(store.getId(), store.getEmail());
+        String role = store.getRole() == null || store.getRole().isBlank()
+            ? StoreRole.STORE.name()
+            : store.getRole();
+        String accessToken = jwtService.generateToken(store.getId(), store.getEmail(), role);
         return new AuthResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), store.getApiKeyPublic());
     }
 

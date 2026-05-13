@@ -6,6 +6,7 @@ import com.fitvision.engine.recommendation.RecommendationInput;
 import com.fitvision.engine.recommendation.RecommendationOutput;
 import com.fitvision.infrastructure.security.TenantContext;
 import com.fitvision.shared.response.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/widget/v1")
+@Tag(name = "Widget")
 public class WidgetRecommendationController {
 
     private static final Logger log = LoggerFactory.getLogger(WidgetRecommendationController.class);

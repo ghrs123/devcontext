@@ -5,6 +5,7 @@ import com.fitvision.infrastructure.persistence.StoreRepository;
 import com.fitvision.infrastructure.security.TenantContext;
 import com.fitvision.shared.exception.StoreNotFoundException;
 import com.fitvision.shared.response.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -19,6 +20,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/dashboard/v1/store")
+@Tag(name = "Dashboard")
 public class StoreController {
 
     private final StoreRepository storeRepository;

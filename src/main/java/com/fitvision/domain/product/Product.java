@@ -17,7 +17,7 @@ public class Product {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "brand_id", nullable = false)
+    @Column(name = "brand_id")
     private UUID brandId;
 
     @Column(name = "tenant_id", nullable = false)

@@ -62,7 +62,7 @@ public class GlobalExceptionHandler {
         return switch (code) {
             case SIZE_CHART_NOT_FOUND, PRODUCT_NOT_FOUND, STORE_NOT_FOUND, BRAND_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case INVALID_API_KEY, INVALID_SECRET_KEY, INVALID_CREDENTIALS, UNAUTHORIZED -> HttpStatus.UNAUTHORIZED;
-            case STORE_ALREADY_EXISTS -> HttpStatus.CONFLICT;
+            case STORE_ALREADY_EXISTS, ADMIN_ALREADY_EXISTS -> HttpStatus.CONFLICT;
             case INVALID_BODY_MEASUREMENTS, VALIDATION_ERROR,
                  UNSUPPORTED_FILE_FORMAT, SIZE_CHART_PARSE_ERROR -> HttpStatus.BAD_REQUEST;
             default -> HttpStatus.INTERNAL_SERVER_ERROR;

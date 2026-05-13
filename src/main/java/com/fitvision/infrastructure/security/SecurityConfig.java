@@ -61,7 +61,10 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/api/admin/seed").permitAll()
                         .requestMatchers("/api/dashboard/v1/auth/**").permitAll()
+                        .requestMatchers("/api/admin/**").authenticated()
                         .requestMatchers("/api/dashboard/**").authenticated()
                         .requestMatchers("/api/widget/**").authenticated()
                         .anyRequest().permitAll()
@@ -69,10 +72,11 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
                             String path = request.getRequestURI();
-                            ErrorCode code = path.startsWith("/api/dashboard/")
+                            boolean jwtPath = path.startsWith("/api/dashboard/") || path.startsWith("/api/admin/");
+                            ErrorCode code = jwtPath
                                     ? ErrorCode.UNAUTHORIZED
                                     : ErrorCode.INVALID_API_KEY;
-                            String message = path.startsWith("/api/dashboard/")
+                            String message = jwtPath
                                     ? "Missing or invalid JWT. Provide Authorization: Bearer <token>."
                                     : "Missing or invalid API key. Provide a valid X-FitVision-Key header.";
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -112,9 +116,16 @@ public class SecurityConfig {
         dashboardCors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         dashboardCors.setMaxAge(3600L);
 
+                CorsConfiguration adminCors = new CorsConfiguration();
+                adminCors.setAllowedOriginPatterns(List.of("*"));
+                adminCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                adminCors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+                adminCors.setMaxAge(3600L);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/widget/**", widgetCors);
         source.registerCorsConfiguration("/api/dashboard/**", dashboardCors);
+                source.registerCorsConfiguration("/api/admin/**", adminCors);
         return source;
     }
 }

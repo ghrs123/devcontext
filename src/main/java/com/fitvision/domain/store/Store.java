@@ -3,6 +3,7 @@ package com.fitvision.domain.store;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -51,9 +52,19 @@ public class Store {
     @Column(name = "subscription_status", nullable = false)
     private String subscriptionStatus;
 
+    @Column(name = "role", nullable = false)
+    private String role;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    void prePersist() {
+        if (role == null || role.isBlank()) {
+            role = StoreRole.STORE.name();
+        }
+    }
 }
