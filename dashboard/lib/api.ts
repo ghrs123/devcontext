@@ -8,6 +8,7 @@ import type {
   Product,
   ProductRequest,
   RegisterRequest,
+  SizeChartUploadResult,
   SizeEntryData,
   StoreProfile,
   UpdateStoreProfileRequest
@@ -29,8 +30,8 @@ export class ApiError extends Error {
 
 function handleUnauthorized() {
   clearToken();
-  if (typeof window !== 'undefined') {
-    window.location.href = '/login';
+  if (globalThis.window !== undefined) {
+    globalThis.location.href = '/login';
   }
 }
 
@@ -158,11 +159,11 @@ export const api = {
     });
   },
 
-  uploadSizeChart(productId: string, file: File): Promise<{ sizeChartId: string; version: number; entriesSaved: number }> {
+  uploadSizeChart(productId: string, file: File): Promise<SizeChartUploadResult> {
     const formData = new FormData();
     formData.append('file', file);
 
-    return request<{ sizeChartId: string; version: number; entriesSaved: number }>(
+    return request<SizeChartUploadResult>(
       `/api/dashboard/v1/size-charts/${productId}/upload`,
       {
         method: 'POST',
@@ -171,8 +172,21 @@ export const api = {
     );
   },
 
+  uploadManualSizeChart(productId: string, entries: SizeEntryData[]): Promise<SizeChartUploadResult> {
+    return request<SizeChartUploadResult>(`/api/dashboard/v1/size-charts/${productId}/manual`, {
+      method: 'POST',
+      body: JSON.stringify(entries)
+    });
+  },
+
   getActiveSizeChart(productId: string): Promise<SizeEntryData[]> {
     return request<SizeEntryData[]>(`/api/dashboard/v1/size-charts/${productId}/active`);
+  },
+
+  async deactivateActiveSizeChart(productId: string): Promise<void> {
+    await request<null>(`/api/dashboard/v1/size-charts/${productId}/active`, {
+      method: 'DELETE'
+    });
   },
 
   getAnalyticsSummary(): Promise<AnalyticsSummary> {

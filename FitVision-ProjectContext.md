@@ -395,10 +395,9 @@ sizeChartRepository.findById(id);
 - Store the scrape timestamp and source URL for every scraped size chart
 - Flag scraped data with staleness after 30 days — trigger re-scrape
 # FitVision — Build Progress
-# FitVision — Build Progress
 
 ## Current Status
-Phase 6 — Complete. Widget is 4.32KB gzipped, full flow validated in browser. Next: Phase 7 — Store Dashboard (Next.js frontend).
+Phase 7 — Complete. Store dashboard fully implemented (Next.js 14, auth, products, size charts, analytics, settings). Backend running in Docker. Full end-to-end flow validated in browser. Known issues identified and queued for Phase A fixes before Phase 8.
 
 ## What Has Been Built
 
@@ -406,6 +405,7 @@ Phase 6 — Complete. Widget is 4.32KB gzipped, full flow validated in browser. 
 - 80+ production classes
 - 77 tests passing (45 unit + 32 integration)
 - 3 Flyway migrations (V1, V2, V3)
+- Running in Docker via docker-compose
 
 ### Widget (Vanilla JS + Vite)
 - Single JS file: fitvision-widget.min.js (4.32KB gzipped)
@@ -414,9 +414,12 @@ Phase 6 — Complete. Widget is 4.32KB gzipped, full flow validated in browser. 
 - Mock mode for local testing without backend
 - build-check.js validates gzip size < 50KB on every build
 
-### Infrastructure
-- Singleton Testcontainers pattern in AbstractIntegrationTest
-- Docker Compose — pending (add before deployment)
+### Store Dashboard (Next.js 14)
+- Auth: register, login, logout, JWT + cookie mirror for middleware
+- Sidebar navigation: Dashboard, Products, Settings
+- Analytics: summary cards, quality distribution chart (Recharts), top products table
+- Products: full CRUD, size chart upload (CSV/Excel drag-and-drop), manual entry, soft delete
+- Settings: store profile, API keys (reveal/copy/regenerate), Widget Integration Guide
 
 ## Completed Phases
 
@@ -458,57 +461,178 @@ Phase 6 — Complete. Widget is 4.32KB gzipped, full flow validated in browser. 
 - JWT auth: register, login, BCrypt strength 12, 24h token
 - StoreController: GET/PATCH /profile, GET /api-keys, POST /api-keys/regenerate
 - ProductController: full CRUD with soft delete
-- AnalyticsController: summary (totalRecommendations, last30Days, avgConfidence, qualityDistribution, topProducts) + paginated list
-- 32 integration tests: StoreAuthControllerIT, StoreControllerIT, ProductControllerIT, AnalyticsControllerIT
+- AnalyticsController: summary + paginated list
+- 32 integration tests
 
 ### Phase 6 — Embeddable Widget ✅
-- /widget — separate directory from Spring Boot backend
-- Vite build, iife format, single file output
-- api.js: fetch + AbortController + timeout, typed errors (NetworkError, ApiError)
-- ui.js: renderTrigger, renderForm, renderLoading, renderResult, renderError
-- main.js: auto-init on DOMContentLoaded, window.FitVision.init(), multi-container support
-- styles.css: scoped .fitvision- prefix, responsive, prefers-reduced-motion
-- Accessibility: ARIA roles, labels, keyboard navigation
-- build-check.js: gzip size validation on every build
-- Output: fitvision-widget.min.js — 4.32KB gzipped
-- Validated in browser: success, hasSizeChart=false fallback, error state, multiple widgets on same page
+- Vite build, iife format, 4.32KB gzipped
+- api.js, ui.js, main.js, styles.css
+- Accessibility, prefers-reduced-motion, multi-container support
+- build-check.js size validation
+
+### Phase 7 — Store Dashboard ✅
+- Next.js 14 + Tailwind + shadcn/ui
+- Auth flow, middleware route protection, JWT + cookie mirror
+- Analytics dashboard with Recharts
+- Products CRUD + size chart upload/manual
+- Settings: profile, API keys, Widget Integration Guide
+- Running at localhost:3000
 
 ## Current Phase
-Phase 7 — Store Dashboard (Next.js 14 frontend)
+Phase A — Critical Fixes (must complete before Phase 8)
+
+## Known Issues (to fix in Phase A)
+
+### Issue 1 — SecretKeyAuthFilter blocking dashboard routes
+SecretKeyAuthFilter intercepts all /api/dashboard/** instead of only /api/dashboard/v1/size-charts/**
+Fix: add shouldNotFilter() to SecretKeyAuthFilter scoping it to /api/dashboard/v1/size-charts/ only
+
+### Issue 2 — brandId required when creating products
+ProductService throws BRAND_NOT_FOUND when no brand exists for tenant
+Fix: make brandId truly optional — product can be created without a brand
+
+### Issue 3 — No brand management UI
+Store owners cannot create or manage brands from the dashboard
+Fix: add brand management section to the Products page (create brand inline when adding product)
+
+### Issue 4 — No admin area
+No way for FitVision operator to manage tenants, global brands, or platform metrics
+Fix: implement Phase A3 — Admin Area
+
+### Issue 5 — Swagger/OpenAPI not configured
+No API documentation available for developers
+Fix: add springdoc-openapi dependency and configure SecurityConfig to permit /swagger-ui/**
+
+### Issue 6 — Docker image not auto-rebuilt on code changes
+Developer must manually run docker compose down + mvn package + docker compose up --build
+Fix: document the rebuild workflow clearly; consider docker compose watch for development
 
 ## Remaining Phases
 
-### Phase 7 — Store Dashboard (next to execute)
-- Next.js 14 + Tailwind CSS + shadcn/ui
-- Store onboarding flow: register → add product → upload size chart → get script tag
-- Product and size chart management UI
-- Analytics dashboard
-- Stripe billing UI
+### Phase A — Critical Fixes (next to execute)
+
+**A1 — Backend fixes (immediate)**
+- Make brandId optional in ProductService
+- Add shouldNotFilter() to SecretKeyAuthFilter
+- Add Swagger/OpenAPI
+- V4 migration: add role column to stores (STORE | ADMIN)
+- Add seed script to create first admin account
+
+**A2 — Brand management UI**
+- BrandController: GET /brands, POST /brands (tenant-scoped)
+- Brand selector in ProductForm (create new brand inline or select existing)
+- Global brands (FitVision-managed, tenant_id = null) visible to all stores
+
+**A3 — Admin Area Backend**
+- AdminAuthFilter: JWT valid + role = ADMIN
+- GET /api/admin/stores — list all tenants with metrics
+- PATCH /api/admin/stores/{id}/status — activate/deactivate tenant
+- GET /api/admin/metrics — platform-wide metrics
+- GET/POST /api/admin/brands — manage global brands
+- POST /api/admin/brands/{id}/size-charts — upload global size charts
+- GET /api/admin/recommendations — platform-wide recommendation log
+
+**A4 — Admin Area Frontend**
+- Separate route group /admin in Next.js dashboard
+- Stores list: name, email, plan, status, registeredAt, recommendationCount
+- Toggle store active/inactive
+- Platform metrics: total stores, total recommendations, avg confidence
+- Global brands management: create brand + upload size chart
+- Admin login (same JWT, role checked client-side + server-side)
 
 ### Phase 8 — Shopify App
-- Shopify App setup
-- Automatic product sync
-- One-click widget installation
-- App Store listing
+- Shopify App setup (Shopify CLI, app bridge)
+- Automatic product sync from Shopify catalogue to FitVision
+- One-click widget installation into Shopify theme
+- Webhook handlers: product created/updated/deleted
+- App Store listing preparation
+- Shopify OAuth flow
 
 ### Phase 9 — Scraping Pipeline
-- Playwright scraper for major brands (Zara, H&M, etc.)
-- Scheduled re-scrape every 30 days
-- Scrape monitoring and alerting
-- Manual override for scraped data
+- Playwright scraper for major brands (Zara, H&M, Pull&Bear, Mango, C&A)
+- Scheduled re-scrape every 30 days via Spring Scheduler
+- Scrape monitoring: last_scraped_at, staleness flag after 30 days
+- Admin UI trigger: force re-scrape per brand
+- Manual override: admin can edit scraped size charts
+- Robots.txt compliance, rate limiting
+- Store scrape source URL for traceability
+
+### Phase 10 — Billing & Subscriptions
+- Stripe integration (subscriptions)
+- Plans: Free (2 products, no export), Starter €29/mo, Pro €79/mo, Team €149/mo
+- Stripe webhook handlers: subscription created/updated/cancelled
+- Plan enforcement: check limits before allowing product creation or recommendations
+- Billing UI in store dashboard settings
+- Admin view: subscription status per store
+
+### Phase 11 — Production Deployment
+- Railway (backend) + Vercel (dashboard) + Cloudflare (widget CDN)
+- Environment variables audit (JWT secret, DB URL, Stripe keys)
+- Neon PostgreSQL (production database, serverless)
+- Cloudflare R2 (file storage for size chart uploads)
+- Resend (transactional email: welcome, API key regenerated, plan upgraded)
+- SSL, custom domain (fitvision.io, app.fitvision.io, api.fitvision.io)
+- CI/CD pipeline: GitHub Actions → build → test → deploy
+
+### Phase 12 — Observability & Operations
+- Structured logging with correlation IDs
+- Health checks and uptime monitoring
+- Error alerting (Sentry or similar)
+- Performance monitoring: p95 recommendation latency
+- Admin dashboard: system health panel
+- Backup strategy for PostgreSQL
+
+## Admin Area — Detailed Specification
+
+### Who is the Admin
+The FitVision operator (you). Single admin account created via seed script on first deploy.
+Admin has full read/write access to all tenant data and platform configuration.
+Admin cannot be created via the public register endpoint.
+
+### Admin Levels
+
+**Level 1 — Operational (Phase A3/A4)**
+- View all registered stores (name, email, plan, status, registration date)
+- Activate / deactivate any store
+- View platform-wide metrics (total stores, total recommendations, avg confidence, quality distribution)
+- Manage global brands (create, edit, upload size charts)
+- Global size charts available to all stores automatically
+
+**Level 2 — Business (Phase 10)**
+- View subscription status per store
+- Override plan for a store (manual upgrade/downgrade)
+- View revenue metrics
+- Impersonate a store for support (read-only view of their data)
+
+**Level 3 — Technical (Phase 12)**
+- View recommendation logs across all tenants
+- Force re-scrape per brand
+- View and manage scraping pipeline status
+- System health dashboard
+- Error log viewer per tenant
+
+### Admin Security Rules
+- Admin JWT contains role: ADMIN claim
+- AdminAuthFilter validates JWT + role before any /api/admin/** request
+- Admin endpoints never exposed in public Swagger without authentication
+- Admin account created only via seed script — never via public API
+- All admin actions logged with admin user ID and timestamp
 
 ## Decisions Made
 - JWT chosen over Keycloak — simpler, no external dependency
 - Singleton Testcontainers pattern — static block starts container once per JVM
-- SecretKeyAuthFilter retained on /size-charts/** for backward compatibility
+- SecretKeyAuthFilter retained on /size-charts/** for backward compatibility with Phase 4 tests
 - GDPR: body measurements stored as BigDecimal.ZERO when storeBodyData=false
 - Widget CSS injected into JS bundle — single file, no separate CSS
+- Token stored in localStorage + cookie mirror for Next.js middleware compatibility
+- Docker Compose used for local development; Railway for production backend
 
 ## Decisions Pending
-- Pricing tiers (per recommendation vs flat monthly)
-- Which brands in initial FitVision-managed database
-- Docker Compose setup (before deployment)
-- Stripe integration timing (Phase 7)
+- Pricing tiers finalisation (per recommendation vs flat monthly)
+- Which brands in initial FitVision-managed database (Zara, H&M confirmed; others TBD)
+- Stripe integration timing (Phase 10, after admin area)
+- Admin seed script: password stored in .env, never committed
+- Whether to use Neon serverless or dedicated Railway PostgreSQL for production
 # FitVision — Phase 1 Prompts
 
 ---
@@ -2579,3 +2703,616 @@ Before moving to Phase 8, verify:
 - [ ] Settings: regenerate keys → confirmation dialog → new keys shown
 - [ ] Integration guide shows correct script tag with store's API key
 - [ ] Dashboard is usable on mobile (responsive sidebar)
+# FitVision — Phase A Prompts: Critical Fixes + Admin Area
+
+> Pre-condition: Phase 7 complete. Dashboard running at localhost:3000. Backend running in Docker. Known issues documented in progress.md.
+
+---
+
+## Prompt A1 — Backend Critical Fixes
+
+### CONTEXT
+FitVision backend. Several issues discovered during real-world testing that must be fixed before Phase 8.
+
+Current state:
+- SecretKeyAuthFilter applies to all /api/dashboard/** instead of only /api/dashboard/v1/size-charts/**
+- ProductService throws BRAND_NOT_FOUND when brandId is null — brand should be optional
+- No Swagger/OpenAPI configured
+- No admin role or admin account mechanism
+- Store entity has no role field
+
+### OBJECTIVE
+Fix all four issues in a single backend update.
+
+**Fix 1 — SecretKeyAuthFilter scope**
+
+In SecretKeyAuthFilter.java, add:
+```java
+@Override
+protected boolean shouldNotFilter(HttpServletRequest request) {
+    String path = request.getRequestURI();
+    return !path.startsWith("/api/dashboard/v1/size-charts/");
+}
+```
+
+**Fix 2 — brandId optional in ProductService**
+
+In ProductService, when handling product creation/update:
+- If brandId is null or not provided: create product without brand association
+- If brandId is provided: validate it belongs to tenant or is global (existing behaviour)
+- Never throw BRAND_NOT_FOUND when brandId was not provided at all
+- Update ProductResponse to return brandId and brandName as nullable
+
+**Fix 3 — Swagger/OpenAPI**
+
+Add to pom.xml:
+```xml
+<dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+    <version>2.3.0</version>
+</dependency>
+```
+
+In SecurityConfig, add to permit list:
+```java
+.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+```
+
+Add @Tag annotations to existing controllers grouping them by area (Widget, Dashboard, Admin).
+
+**Fix 4 — Admin role migration**
+
+Create V4__add_admin_role.sql:
+```sql
+ALTER TABLE stores ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'STORE';
+CREATE INDEX idx_stores_role ON stores(role);
+```
+
+Update Store entity with role field (String, default 'STORE').
+Add StoreRole enum: STORE, ADMIN.
+
+**Fix 5 — Admin seed script**
+
+Create scripts/create-admin.sh:
+```bash
+#!/bin/bash
+# Creates the first admin account
+# Usage: ./scripts/create-admin.sh <email> <password>
+# Requires backend running at localhost:8080
+curl -X POST http://localhost:8080/api/admin/seed \
+  -H "Content-Type: application/json" \
+  -d "{\"email\": \"$1\", \"password\": \"$2\", \"name\": \"FitVision Admin\"}"
+```
+
+Create POST /api/admin/seed endpoint (permit all, but only works if zero admin accounts exist):
+- Checks if any ADMIN role store exists — if yes, returns 409 CONFLICT
+- Creates store with role=ADMIN, plan=ADMIN, status=ACTIVE
+- Returns JWT for immediate use
+- After first admin created, endpoint returns 409 on all subsequent calls
+
+### CONSTRAINTS
+- SecretKeyAuthFilter fix must not break existing SizeChartControllerIT tests
+- brandId null must be allowed in both create and update product
+- Swagger must not expose admin endpoints without authentication
+- Seed endpoint is the ONLY way to create an admin — not via /auth/register
+
+### EXPECTED OUTPUT
+- Updated SecretKeyAuthFilter.java
+- Updated ProductService.java
+- Updated pom.xml (springdoc added)
+- Updated SecurityConfig.java (Swagger + seed endpoint permitted)
+- V4__add_admin_role.sql
+- Updated Store.java (role field)
+- AdminSeedController.java
+- scripts/create-admin.sh
+- Updated docker-compose.yml rebuild and test
+
+### NEXT STEP
+Prompt A2 will add brand management to the store dashboard.
+
+---
+
+## Prompt A2 — Brand Management (Backend + Frontend)
+
+### CONTEXT
+FitVision. brandId is now optional for products (fixed in A1). Stores need to be able to create and manage their own brands. Global brands (tenant_id = null) are managed by admin.
+
+Backend existing:
+- BrandRepository: findAllByTenantIdOrTenantIdIsNull, findByIdAndTenantIdOrTenantIdIsNull
+- Brand entity: id, name, slug, source (fitvision_managed/store_uploaded), tenant_id (null = global)
+
+### OBJECTIVE
+Add brand management endpoints and UI.
+
+**Backend — BrandController** (@RestController, /api/dashboard/v1/brands)
+- GET / → returns tenant's own brands + all global brands (source differentiated)
+- POST / → creates a new brand for the tenant (source=store_uploaded)
+  - Auto-generates slug from name (lowercase, spaces to hyphens, trim special chars)
+  - Validates slug uniqueness within tenant scope
+- DELETE /{id} → soft-delete tenant's own brand (cannot delete global brands)
+
+**BrandResponse** (DTO):
+- id, name, slug, source (store_uploaded / fitvision_managed), isGlobal (boolean)
+
+**Frontend — Brand selector in ProductForm**
+
+Replace the current brandId UUID input with:
+- Dropdown showing all available brands (tenant + global)
+- "Create new brand" option at the bottom of the dropdown
+- When selected: shows inline input for brand name, calls POST /brands, adds to list, auto-selects
+- Brand is optional — "No brand" is a valid selection
+
+**Frontend — Brands section in Products page**
+
+Add a collapsible "Manage Brands" section above the products table:
+- Lists tenant's own brands with delete option
+- "Add Brand" button → inline form (name only, slug auto-generated)
+- Global brands shown as read-only with "Global" badge
+
+### CONSTRAINTS
+- Slug generation: lowercase, trim, replace spaces with hyphens, remove non-alphanumeric except hyphens
+- Cannot create a brand with the same slug as an existing global brand
+- Cannot delete global brands from store dashboard
+- Brand delete: if products are associated, show warning but allow (products become brandless)
+
+### EXPECTED OUTPUT
+- BrandController.java
+- BrandResponse.java (DTO)
+- Updated BrandRepository.java (if new queries needed)
+- Updated ProductForm.tsx (brand selector with inline create)
+- Updated products/page.tsx (brands management section)
+
+### NEXT STEP
+Prompt A3 will implement the admin area backend.
+
+---
+
+## Prompt A3 — Admin Area Backend
+
+### CONTEXT
+FitVision. Admin role exists (V4 migration). Seed endpoint created. Admin JWT contains role=ADMIN claim. JwtService already generates tokens — needs to include role claim.
+
+All admin endpoints are under /api/admin/**. AdminAuthFilter validates JWT + role=ADMIN.
+
+### OBJECTIVE
+Implement the complete admin backend API.
+
+**AdminAuthFilter** (OncePerRequestFilter)
+- Triggers on /api/admin/** (except /api/admin/seed)
+- Reads Authorization: Bearer token
+- Validates via JwtService
+- Extracts role from token — if not ADMIN, returns 403 FORBIDDEN
+- Sets TenantContext with admin store ID (admins operate globally, not tenant-scoped)
+
+**Updated JwtService**
+- Include role in JWT claims: role=STORE or role=ADMIN
+- Add extractRole(String token): String method
+
+**AdminMetricsResponse** (DTO)
+- totalStores, activeStores, totalRecommendations, recommendationsLast30Days
+- averageConfidenceScore, qualityDistribution (Map<String, Long>)
+- topBrands (List<BrandRecommendationStat> — top 5 brands by recommendation count)
+
+**StoreAdminView** (DTO)
+- id, name, email, plan, role, status, platform, createdAt
+- totalProducts, totalRecommendations, lastRecommendationAt
+
+**AdminController** (@RestController, /api/admin/v1)
+
+Endpoints:
+
+GET /metrics → AdminMetricsResponse
+- Platform-wide aggregation across all tenants
+- No tenant_id filter — queries all data
+
+GET /stores?page=0&size=20&status=ACTIVE&search=
+- Paginated list of all stores (StoreAdminView)
+- Filter by status (ACTIVE/INACTIVE/ALL)
+- Search by name or email
+
+PATCH /stores/{storeId}/status
+- Body: { "status": "ACTIVE" | "INACTIVE" }
+- Activates or deactivates a store
+- Deactivated stores: widget calls return 401 (ApiKeyAuthFilter checks status=ACTIVE)
+
+GET /stores/{storeId} → StoreAdminView with full detail
+
+GET /brands → all brands (global + tenant-scoped)
+POST /brands → create global brand (tenant_id = null, source = fitvision_managed)
+PUT /brands/{id} → update global brand name/slug
+DELETE /brands/{id} → soft-delete global brand
+
+POST /brands/{brandId}/size-charts/upload
+- Multipart file upload
+- Creates global size chart for brand (available to all stores)
+- Same parser infrastructure as Phase 4
+
+GET /brands/{brandId}/size-charts → list versions
+DELETE /brands/{brandId}/size-charts/active → deactivate active chart
+
+GET /recommendations?page=0&size=20&tenantId=&productId=&quality=
+- Platform-wide recommendation log with filters
+- Returns RecommendationRequest records with store and product context
+
+**AdminService** (@Service)
+- Aggregates metrics across all tenants (no tenant_id filter)
+- Manages global brand operations
+
+### CONSTRAINTS
+- Admin endpoints NEVER use TenantContext for data filtering — they query all tenants
+- AdminAuthFilter must be added to SecurityConfig BEFORE JwtAuthFilter in the chain
+- /api/admin/seed remains permitted without auth (handled separately in A1)
+- All admin actions logged at INFO with adminStoreId and action performed
+- Deactivating a store does not delete data — only prevents new API key lookups
+
+### EXPECTED OUTPUT
+- AdminAuthFilter.java
+- Updated JwtService.java (role claim added)
+- AdminMetricsResponse.java, StoreAdminView.java, BrandRecommendationStat.java
+- AdminController.java
+- AdminService.java
+- Updated SecurityConfig.java (AdminAuthFilter added)
+- Updated ApiKeyAuthFilter.java (check store status=ACTIVE before setting TenantContext)
+
+### NEXT STEP
+Prompt A4 will build the admin frontend.
+
+---
+
+## Prompt A4 — Admin Area Frontend
+
+### CONTEXT
+FitVision dashboard (Next.js 14). Admin backend API complete at /api/admin/v1/**. Admin JWT is same format as store JWT but with role=ADMIN claim.
+
+Admin frontend is a separate route group within the same Next.js app: /admin/**
+
+Admin users log in via the same /login page — after login, the JWT is inspected client-side. If role=ADMIN, redirect to /admin/dashboard instead of /dashboard.
+
+### OBJECTIVE
+Build the admin area frontend.
+
+**Route structure**
+```
+app/(admin)/
+  layout.tsx          # Admin shell (different sidebar from store dashboard)
+  admin/
+    dashboard/        # Platform metrics
+    stores/           # Store management
+    brands/           # Global brand + size chart management
+    recommendations/  # Platform-wide recommendation log
+```
+
+**Admin layout** (app/(admin)/layout.tsx)
+- Dark sidebar or visually distinct from store dashboard
+- Navigation: Platform Overview, Stores, Global Brands, Recommendations
+- Top bar: "FitVision Admin" label, logout
+- No store name shown (admin operates globally)
+
+**Platform Overview** (admin/dashboard/page.tsx)
+Summary cards:
+- Total Stores (active / total)
+- Total Recommendations (all time + last 30 days)
+- Average Confidence Score (colour coded)
+- Quality distribution chart (Recharts bar chart across all tenants)
+
+Recent activity:
+- Last 10 recommendations across all tenants (store name, product, size, confidence, timestamp)
+
+**Stores** (admin/stores/page.tsx)
+Table with columns: Store name, Email, Plan, Status (badge), Registered, Products, Recommendations, Actions
+- Actions: View detail, Activate/Deactivate (confirmation dialog)
+- Search by name or email
+- Filter by status (All / Active / Inactive)
+- Pagination
+
+Store detail drawer:
+- Full store info
+- List of their products with size chart status
+- Recommendation history for that store
+
+**Global Brands** (admin/brands/page.tsx)
+Table: Brand name, Slug, Source, Size Chart status (active/none), Last updated, Actions
+- Actions: Upload size chart, Edit name, Delete
+
+Upload size chart drawer:
+- Same drag-and-drop as store dashboard
+- Shows current active chart entries after upload
+- Version history
+
+Create brand form:
+- Name (slug auto-generated preview shown)
+- Submit creates global brand
+
+**Recommendations Log** (admin/recommendations/page.tsx)
+Table: Store, Product, Size recommended, Confidence, Quality, Date
+- Filters: store, quality, date range
+- Paginated
+
+**Middleware update**
+- After login, decode JWT client-side to extract role
+- role=ADMIN → redirect to /admin/dashboard
+- role=STORE → redirect to /dashboard
+- /admin/** routes: check role=ADMIN, redirect to /login if not
+
+**lib/api.ts additions**
+- adminGetMetrics()
+- adminGetStores(page, size, status, search)
+- adminGetStore(storeId)
+- adminUpdateStoreStatus(storeId, status)
+- adminGetBrands()
+- adminCreateBrand(name)
+- adminUploadGlobalSizeChart(brandId, file)
+- adminGetRecommendations(page, size, filters)
+
+### CONSTRAINTS
+- Admin routes use same JWT storage (localStorage + cookie) as store routes
+- Role check happens both in middleware (cookie) and in each admin page (SWR fetch to /api/admin/v1/metrics — if 403, redirect to /login)
+- Admin area must be visually distinct from store dashboard to avoid confusion
+- No store-specific features in admin area (no widget guide, no API keys management)
+
+### EXPECTED OUTPUT
+- app/(admin)/layout.tsx
+- app/(admin)/admin/dashboard/page.tsx
+- app/(admin)/admin/stores/page.tsx
+- app/(admin)/admin/brands/page.tsx
+- app/(admin)/admin/recommendations/page.tsx
+- components/admin/AdminSidebar.tsx
+- components/admin/StoreTable.tsx
+- components/admin/GlobalBrandManager.tsx
+- components/admin/PlatformMetrics.tsx
+- Updated middleware.ts (role-based redirect)
+- Updated lib/api.ts (admin methods added)
+
+### PHASE A COMPLETION CHECKLIST
+Before moving to Phase 8, verify:
+- [ ] SecretKeyAuthFilter no longer blocks /api/dashboard/v1/products or /api/dashboard/v1/analytics/**
+- [ ] Product can be created without selecting a brand
+- [ ] Brand can be created inline from the ProductForm
+- [ ] Swagger accessible at http://localhost:8080/swagger-ui.html
+- [ ] Admin seed: ./scripts/create-admin.sh admin@fitvision.io password creates admin account
+- [ ] Admin login redirects to /admin/dashboard
+- [ ] Admin can see list of all stores
+- [ ] Admin can activate/deactivate a store (deactivated store widget returns 401)
+- [ ] Admin can create a global brand and upload a size chart
+- [ ] Global brand size chart appears as recommendation option for all stores
+- [ ] Admin can view platform-wide recommendation log
+
+---
+
+# FitVision — Phase 8 Prompts: Shopify App
+
+> Pre-condition: Phase A complete. Admin area operational. Brand management working. Backend stable with all fixes applied.
+
+---
+
+## Prompt 8.1 — Shopify App Setup + OAuth Flow
+
+### CONTEXT
+FitVision. The Shopify App allows store owners to install FitVision with one click instead of manually copying a script tag. The app handles authentication via Shopify OAuth and automatically injects the widget into product pages.
+
+Shopify App requirements:
+- Built with Shopify CLI and @shopify/shopify-api Node.js library
+- Hosted separately from the dashboard (new /shopify-app directory)
+- Uses Shopify OAuth to authenticate store owners
+- On install: creates a FitVision account for the Shopify store (or links to existing)
+- Registers webhooks: products/create, products/update, products/delete
+
+The Shopify App is a separate Node.js/Express server (not Next.js — Shopify tooling works better with Express).
+
+### OBJECTIVE
+Set up the Shopify App project with OAuth flow.
+
+**Project structure**
+```
+/shopify-app
+  ├── src/
+  │   ├── index.js          # Express server entry
+  │   ├── auth.js           # Shopify OAuth handlers
+  │   ├── webhooks.js       # Webhook registration + handlers
+  │   ├── fitvision.js      # FitVision API client
+  │   └── config.js         # Environment config
+  ├── .env
+  └── package.json
+```
+
+**OAuth flow**
+1. Store owner visits app install URL
+2. Shopify redirects to /auth/shopify with shop parameter
+3. App redirects to Shopify OAuth consent page
+4. Shopify redirects back to /auth/callback with code
+5. App exchanges code for permanent access token
+6. App calls FitVision backend POST /api/shopify/connect:
+   - shop domain, access token (encrypted), shop name
+   - FitVision creates or links a Store account
+   - Returns FitVision JWT + apiKeyPublic
+7. App stores FitVision credentials, redirects to app embedded UI
+
+**FitVision backend additions** (new endpoints):
+POST /api/shopify/connect
+- Validates Shopify HMAC signature
+- Creates or finds Store by shop domain
+- Returns { jwt, apiKeyPublic, apiKeySecret }
+
+GET /api/shopify/status?shop=
+- Returns whether shop is connected and active
+
+### CONSTRAINTS
+- Shopify access tokens stored encrypted (AES-256) in FitVision database
+- New column: stores.shopify_shop (VARCHAR, nullable, unique)
+- New column: stores.shopify_access_token_encrypted (TEXT, nullable)
+- V5__add_shopify_fields.sql migration
+- HMAC validation mandatory on all Shopify webhook calls
+
+### EXPECTED OUTPUT
+- /shopify-app/package.json
+- /shopify-app/src/index.js
+- /shopify-app/src/auth.js
+- /shopify-app/src/config.js
+- /shopify-app/src/fitvision.js
+- V5__add_shopify_fields.sql
+- New ShopifyController.java in backend (/api/shopify/**)
+
+### NEXT STEP
+Prompt 8.2 will implement automatic product sync and widget injection.
+
+---
+
+## Prompt 8.2 — Product Sync + Widget Injection
+
+### CONTEXT
+FitVision Shopify App. OAuth complete. FitVision account linked to Shopify store. Access token available.
+
+### OBJECTIVE
+Implement automatic product sync and widget injection into Shopify theme.
+
+**Product sync on install**
+- On successful OAuth: fetch all products from Shopify API
+- For each product: call FitVision POST /api/dashboard/v1/products with externalProductId = Shopify product ID
+- Store mapping in FitVision (externalProductId is already designed for this)
+- Show sync progress in embedded app UI
+
+**Webhook handlers**
+- products/create → create product in FitVision
+- products/update → update product name/category in FitVision
+- products/delete → soft-delete product in FitVision
+
+**Widget injection**
+- Use Shopify ScriptTag API or Theme App Extension to inject widget
+- Inject into product page template automatically
+- Widget reads product ID from Shopify's liquid context: {{ product.id }}
+- Container div generated dynamically with correct data attributes
+
+**Embedded App UI** (simple React page within Shopify Admin)
+- Connection status (connected / not connected)
+- Products synced count
+- Link to FitVision dashboard for full management
+- "Sync all products" button
+- "Remove app" button (deregisters webhooks, removes widget)
+
+### EXPECTED OUTPUT
+- /shopify-app/src/webhooks.js
+- /shopify-app/src/sync.js
+- /shopify-app/src/ui/ (embedded app pages)
+- Updated ShopifyController.java (webhook endpoints)
+
+---
+
+# FitVision — Phase 9 Prompts: Scraping Pipeline
+
+> Pre-condition: Phase 8 complete or running in parallel. Admin area operational (admin can trigger scrapes and view results).
+
+---
+
+## Prompt 9.1 — Scraper Infrastructure + Zara
+
+### CONTEXT
+FitVision backend. Global brands exist (created by admin). The scraping pipeline fetches size charts from brand websites and stores them as global size charts.
+
+Stack: Spring Scheduler + Playwright Java (already in approved libraries list).
+
+New entities needed:
+- ScrapeJob: id, brandId, status (PENDING/RUNNING/COMPLETED/FAILED), startedAt, completedAt, pagesScraped, entriesFound, errorMessage
+- Add last_scraped_at and scrape_source_url to size_charts table
+
+### OBJECTIVE
+Build the scraping infrastructure and first scraper (Zara).
+
+**ScraperService** (@Service)
+- Method: ScrapeResult scrape(Brand brand)
+- Uses Playwright to navigate to brand size chart page
+- Extracts size data by category (tops, bottoms, dresses)
+- Returns structured SizeEntryData list per category
+
+**ZaraScraper** (@Component, implements BrandScraper)
+- Navigates to zara.com product size guide pages
+- Extracts size tables for men's tops (starting point)
+- Handles pagination and dynamic content (Playwright waits for element)
+- Respects robots.txt — checks before scraping
+- Rate limit: max 1 request per 3 seconds
+
+**ScrapeScheduler** (@Component)
+- @Scheduled(cron = "0 0 2 * * MON") — runs every Monday at 2am
+- Finds all global brands with last_scraped_at older than 30 days
+- Queues scrape jobs
+- Runs jobs sequentially (no parallel scraping)
+
+**Admin trigger**
+- POST /api/admin/v1/brands/{brandId}/scrape → triggers immediate scrape job
+- GET /api/admin/v1/brands/{brandId}/scrape-jobs → list scrape history
+
+**V6 migration**
+```sql
+ALTER TABLE size_charts ADD COLUMN scrape_source_url VARCHAR(500);
+CREATE TABLE scrape_jobs (
+    id UUID PRIMARY KEY,
+    brand_id UUID REFERENCES brands(id),
+    status VARCHAR(20) NOT NULL,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    pages_scraped INTEGER DEFAULT 0,
+    entries_found INTEGER DEFAULT 0,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### CONSTRAINTS
+- Never scrape faster than 1 request per 3 seconds per domain
+- Always check robots.txt before scraping a new domain
+- Store scrape_source_url for every scraped size chart
+- Failed scrape does not overwrite existing active size chart
+- All scraper code must handle site layout changes gracefully (try-catch per step)
+
+### EXPECTED OUTPUT
+- BrandScraper.java (interface)
+- ZaraScraper.java
+- ScraperService.java
+- ScrapeScheduler.java
+- ScrapeJob.java (entity)
+- ScrapeJobRepository.java
+- Updated AdminController.java (scrape trigger + history endpoints)
+- V6__add_scrape_jobs.sql
+- Updated pom.xml (Playwright dependency if not already present)
+
+---
+
+## Prompt 9.2 — Additional Brand Scrapers + Admin Scrape UI
+
+### CONTEXT
+FitVision. Zara scraper working. Infrastructure established. Now adding more brands and admin UI to manage scraping.
+
+### OBJECTIVE
+Add scrapers for H&M, Pull&Bear, Mango. Build admin scrape management UI.
+
+**Additional scrapers**
+- HMScraper.java — hm.com size guide pages
+- PullAndBearScraper.java — pullandbear.com
+- MangoScraper.java — mango.com
+
+**BrandScraperRegistry** (@Component)
+- Map<String, BrandScraper> keyed by brand slug
+- ScraperService resolves correct scraper by brand slug
+- Unknown brands: log warning, skip scrape
+
+**Admin Scrape UI** (admin/brands/page.tsx additions)
+For each global brand:
+- Last scraped date (or "Never")
+- "Scrape now" button → calls POST /api/admin/v1/brands/{id}/scrape
+- Scrape status badge: idle / running / completed / failed
+- Link to scrape history
+- Manual override button: "Edit size chart" (opens same upload drawer as Phase A3)
+
+**Scrape history drawer**
+- List of past scrape jobs with status, timestamp, entries found, error if any
+
+### CONSTRAINTS
+- Each scraper must be independently testable with a mock Playwright browser
+- Scrapers should not fail silently — always update ScrapeJob status
+- Manual override (admin upload) always takes priority over scraped data
+
+### EXPECTED OUTPUT
+- HMScraper.java, PullAndBearScraper.java, MangoScraper.java
+- BrandScraperRegistry.java
+- Updated AdminController.java
+- Updated admin/brands/page.tsx (scrape management UI)

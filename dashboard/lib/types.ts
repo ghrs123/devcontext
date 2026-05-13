@@ -82,6 +82,14 @@ export interface SizeEntryData {
   heightMax?: number | null;
 }
 
+export interface SizeChartUploadResult {
+  sizeChartId: string;
+  version: number;
+  entriesSaved: number;
+  warnings?: string[];
+  success?: boolean;
+}
+
 export interface ProductRecommendationStat {
   productId: string;
   productName: string;
