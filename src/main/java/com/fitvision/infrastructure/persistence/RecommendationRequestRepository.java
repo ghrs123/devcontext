@@ -51,4 +51,56 @@ public interface RecommendationRequestRepository extends JpaRepository<Recommend
         ORDER BY COUNT(r) DESC
         """)
     List<Object[]> findTopProductsByTenantId(@Param("tenantId") UUID tenantId, Pageable pageable);
+
+    long countByCreatedAtAfter(LocalDateTime after);
+
+    @Query("SELECT AVG(r.confidenceScore) FROM RecommendationRequest r")
+    Double findAverageConfidenceGlobal();
+
+    @Query("""
+        SELECT COUNT(r)
+        FROM RecommendationRequest r
+        WHERE (
+            (:quality = 'NO_MATCH' AND (r.recommendedSize = 'NO_MATCH' OR r.confidenceScore = 0))
+         OR (:quality = 'EXACT' AND r.recommendedSize <> 'NO_MATCH' AND r.confidenceScore >= 1.0)
+         OR (:quality = 'PARTIAL' AND r.recommendedSize <> 'NO_MATCH' AND r.confidenceScore >= 0.5 AND r.confidenceScore < 1.0)
+         OR (:quality = 'CLOSEST' AND r.recommendedSize <> 'NO_MATCH' AND r.confidenceScore > 0 AND r.confidenceScore < 0.5)
+        )
+        """)
+    long countByQualityGlobal(@Param("quality") String quality);
+
+    @Query("""
+        SELECT b.id,
+               COALESCE(b.name, 'Unknown Brand'),
+               COUNT(r),
+               AVG(r.confidenceScore)
+        FROM RecommendationRequest r
+        LEFT JOIN com.fitvision.domain.product.Product p ON p.id = r.productId
+        LEFT JOIN com.fitvision.domain.brand.Brand b ON b.id = p.brandId
+        GROUP BY b.id, b.name
+        ORDER BY COUNT(r) DESC
+        """)
+    List<Object[]> findTopBrands(Pageable pageable);
+
+    @Query("SELECT MAX(r.createdAt) FROM RecommendationRequest r WHERE r.tenantId = :tenantId")
+    LocalDateTime findLastRecommendationAtByTenantId(@Param("tenantId") UUID tenantId);
+
+    @Query("""
+        SELECT r
+        FROM RecommendationRequest r
+        WHERE (:tenantId IS NULL OR r.tenantId = :tenantId)
+          AND (:productId IS NULL OR r.productId = :productId)
+          AND (
+              :quality IS NULL OR :quality = ''
+           OR (:quality = 'NO_MATCH' AND (r.recommendedSize = 'NO_MATCH' OR r.confidenceScore = 0))
+           OR (:quality = 'EXACT' AND r.recommendedSize <> 'NO_MATCH' AND r.confidenceScore >= 1.0)
+           OR (:quality = 'PARTIAL' AND r.recommendedSize <> 'NO_MATCH' AND r.confidenceScore >= 0.5 AND r.confidenceScore < 1.0)
+           OR (:quality = 'CLOSEST' AND r.recommendedSize <> 'NO_MATCH' AND r.confidenceScore > 0 AND r.confidenceScore < 0.5)
+          )
+        ORDER BY r.createdAt DESC
+        """)
+    Page<RecommendationRequest> findAdminRecommendations(@Param("tenantId") UUID tenantId,
+                                                         @Param("productId") UUID productId,
+                                                         @Param("quality") String quality,
+                                                         Pageable pageable);
 }

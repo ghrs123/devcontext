@@ -1,13 +1,18 @@
 package com.fitvision.infrastructure.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fitvision.domain.store.Store;
+import com.fitvision.domain.store.StoreRole;
 import com.fitvision.infrastructure.persistence.StoreRepository;
+import com.fitvision.shared.exception.ErrorCode;
+import com.fitvision.shared.response.ApiResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,35 +25,32 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Component
-public class JwtAuthFilter extends OncePerRequestFilter {
+public class AdminAuthFilter extends OncePerRequestFilter {
 
-    private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
+    private static final Logger log = LoggerFactory.getLogger(AdminAuthFilter.class);
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final String STORE_STATUS_ACTIVE = "ACTIVE";
 
     private final JwtService jwtService;
     private final StoreRepository storeRepository;
+    private final ObjectMapper objectMapper;
 
-    public JwtAuthFilter(JwtService jwtService, StoreRepository storeRepository) {
+    public AdminAuthFilter(JwtService jwtService,
+                           StoreRepository storeRepository,
+                           ObjectMapper objectMapper) {
         this.jwtService = jwtService;
         this.storeRepository = storeRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getRequestURI();
-        if (path.startsWith("/api/widget/") || path.startsWith("/actuator/")) {
+        if (!path.startsWith("/api/admin/")) {
             return true;
         }
-        if (path.startsWith("/api/admin/")) {
-            return true;
-        }
-        if (!path.startsWith("/api/dashboard/")) {
-            return true;
-        }
-        return path.startsWith("/api/dashboard/v1/auth/");
+        return path.startsWith("/api/admin/seed");
     }
 
     @Override
@@ -64,37 +66,43 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String token = authHeader.substring(BEARER_PREFIX.length());
         if (!jwtService.validateToken(token)) {
-            log.warn("Dashboard request rejected: invalid or expired JWT");
             filterChain.doFilter(request, response);
             return;
         }
 
         try {
-            UUID storeId = jwtService.extractStoreId(token);
-            Optional<Store> storeOpt = storeRepository.findById(storeId);
+            String role = jwtService.extractRole(token);
+            if (!StoreRole.ADMIN.name().equals(role)) {
+                log.warn("Admin endpoint forbidden: role={} path={}", role, request.getRequestURI());
+                writeForbidden(response);
+                return;
+            }
 
+            UUID adminStoreId = jwtService.extractStoreId(token);
+            Optional<Store> storeOpt = storeRepository.findById(adminStoreId);
             if (storeOpt.isEmpty()) {
-                log.warn("Dashboard request rejected: store from JWT does not exist");
-                filterChain.doFilter(request, response);
+                log.warn("Admin endpoint forbidden: store in token not found id={}", adminStoreId);
+                writeForbidden(response);
                 return;
             }
 
-            Store store = storeOpt.get();
-            if (!STORE_STATUS_ACTIVE.equals(store.getStatus())) {
-                log.warn("Dashboard request rejected: store {} is not ACTIVE", store.getId());
-                filterChain.doFilter(request, response);
-                return;
-            }
-
+            Store adminStore = storeOpt.get();
             UsernamePasswordAuthenticationToken auth =
-                    UsernamePasswordAuthenticationToken.authenticated(store, null, List.of());
+                    UsernamePasswordAuthenticationToken.authenticated(adminStore, null, List.of());
             SecurityContextHolder.getContext().setAuthentication(auth);
-            TenantContext.set(store.getId());
+            TenantContext.set(adminStore.getId());
 
             filterChain.doFilter(request, response);
         } finally {
             SecurityContextHolder.clearContext();
             TenantContext.clear();
         }
+    }
+
+    private void writeForbidden(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        ApiResponse<Void> body = ApiResponse.error(ErrorCode.UNAUTHORIZED, "Admin role required.");
+        response.getWriter().write(objectMapper.writeValueAsString(body));
     }
 }

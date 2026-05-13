@@ -43,13 +43,19 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
+        private static final String OPTIONS = "OPTIONS";
+        private static final String CONTENT_TYPE = "Content-Type";
+
     private final ApiKeyAuthFilter apiKeyAuthFilter;
         private final JwtAuthFilter jwtAuthFilter;
+        private final AdminAuthFilter adminAuthFilter;
 
     public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter,
-                                                  JwtAuthFilter jwtAuthFilter) {
+                                                  JwtAuthFilter jwtAuthFilter,
+                                                  AdminAuthFilter adminAuthFilter) {
         this.apiKeyAuthFilter = apiKeyAuthFilter;
                 this.jwtAuthFilter = jwtAuthFilter;
+                this.adminAuthFilter = adminAuthFilter;
     }
 
     @Bean
@@ -89,6 +95,7 @@ public class SecurityConfig {
                         })
                 )
                 .addFilterBefore(apiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(adminAuthFilter, JwtAuthFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -106,26 +113,26 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration widgetCors = new CorsConfiguration();
         widgetCors.setAllowedOriginPatterns(List.of("*"));
-        widgetCors.setAllowedMethods(List.of("POST", "OPTIONS"));
-        widgetCors.setAllowedHeaders(List.of("X-FitVision-Key", "Content-Type"));
+        widgetCors.setAllowedMethods(List.of("POST", OPTIONS));
+        widgetCors.setAllowedHeaders(List.of("X-FitVision-Key", CONTENT_TYPE));
         widgetCors.setMaxAge(3600L);
 
         CorsConfiguration dashboardCors = new CorsConfiguration();
         dashboardCors.setAllowedOriginPatterns(List.of("*"));
-        dashboardCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        dashboardCors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        dashboardCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", OPTIONS));
+        dashboardCors.setAllowedHeaders(List.of("Authorization", CONTENT_TYPE));
         dashboardCors.setMaxAge(3600L);
 
-                CorsConfiguration adminCors = new CorsConfiguration();
-                adminCors.setAllowedOriginPatterns(List.of("*"));
-                adminCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-                adminCors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-                adminCors.setMaxAge(3600L);
+        CorsConfiguration adminCors = new CorsConfiguration();
+        adminCors.setAllowedOriginPatterns(List.of("*"));
+        adminCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", OPTIONS));
+        adminCors.setAllowedHeaders(List.of("Authorization", CONTENT_TYPE));
+        adminCors.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/widget/**", widgetCors);
         source.registerCorsConfiguration("/api/dashboard/**", dashboardCors);
-                source.registerCorsConfiguration("/api/admin/**", adminCors);
+        source.registerCorsConfiguration("/api/admin/**", adminCors);
         return source;
     }
 }

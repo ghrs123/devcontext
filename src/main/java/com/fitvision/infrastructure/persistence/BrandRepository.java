@@ -30,4 +30,10 @@ public interface BrandRepository extends JpaRepository<Brand, UUID> {
 
     @Query("SELECT b FROM Brand b WHERE b.deletedAt IS NULL AND b.id = :id AND b.tenantId = :tenantId")
     Optional<Brand> findByIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
+
+    @Query("SELECT b FROM Brand b WHERE b.deletedAt IS NULL ORDER BY b.createdAt DESC")
+    List<Brand> findAllActive();
+
+    @Query("SELECT b FROM Brand b WHERE b.deletedAt IS NULL AND b.id = :id AND b.tenantId IS NULL")
+    Optional<Brand> findGlobalById(@Param("id") UUID id);
 }
