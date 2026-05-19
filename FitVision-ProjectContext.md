@@ -397,15 +397,15 @@ sizeChartRepository.findById(id);
 # FitVision — Build Progress
 
 ## Current Status
-Phase A — In progress. Phases 1–7 complete. Backend running in Docker. Dashboard running at localhost:3000. Two critical fixes being applied: SecretKeyAuthFilter scope and brandId optional. Real-world testing started with Zara size chart data.
+Phase A — Complete. All fixes and admin area fully implemented. Next: smoke test admin flow, then advance to Phase 8 (Shopify App).
 
 ## What Has Been Built
 
 ### Backend (Spring Boot 3.x, Java 21)
 - 80+ production classes
 - 77 tests passing (45 unit + 32 integration)
-- 3 Flyway migrations (V1, V2, V3)
-- Running in Docker via docker-compose (must rebuild manually after code changes)
+- 4 Flyway migrations (V1, V2, V3, V4)
+- Running in Docker via docker-compose
 
 ### Widget (Vanilla JS + Vite)
 - Single JS file: fitvision-widget.min.js (4.32KB gzipped)
@@ -416,10 +416,21 @@ Phase A — In progress. Phases 1–7 complete. Backend running in Docker. Dashb
 
 ### Store Dashboard (Next.js 14)
 - Auth: register, login, logout, JWT + cookie mirror for middleware
+- Role-based redirect on login: ADMIN → /admin/dashboard, STORE → /dashboard
 - Sidebar navigation: Dashboard, Products, Settings
 - Analytics: summary cards, quality distribution chart (Recharts), top products table
-- Products: full CRUD, size chart upload (CSV/Excel drag-and-drop), manual entry, soft delete
+- Products: full CRUD, size chart upload (CSV/Excel), manual entry, soft delete
+- Brand management: create brands inline from ProductForm, list + delete in Products page
 - Settings: store profile, API keys (reveal/copy/regenerate), Widget Integration Guide
+
+### Admin Area (Next.js 14)
+- Separate /admin route group with visually distinct dark sidebar
+- Navigation: Platform Overview, Stores, Global Brands, Recommendations
+- Platform Overview: summary cards + quality chart + recent activity
+- Stores: search, status filter, pagination, activate/deactivate, detail drawer
+- Global Brands: create, edit, delete, size chart upload, version history
+- Recommendations Log: filters by store, quality, date range, pagination
+- useAdminGuard hook: validates role, clears token + redirects on 401/403
 
 ## Completed Phases
 
@@ -478,55 +489,52 @@ Phase A — In progress. Phases 1–7 complete. Backend running in Docker. Dashb
 - Settings: profile, API keys, Widget Integration Guide
 - Running at localhost:3000
 
+### Phase A — Critical Fixes + Admin Area ✅
+
+**A1a — SecretKeyAuthFilter scope**
+- shouldNotFilter() added: scoped to /api/dashboard/v1/size-charts/ only
+- Dashboard routes no longer blocked by wrong filter
+
+**A1b — brandId optional in ProductService**
+- Products can be created without brand association
+- BRAND_NOT_FOUND only thrown when brandId explicitly provided but not found
+
+**A2 — Brand management UI**
+- BrandController: GET /brands, POST /brands (tenant-scoped, slug auto-generated)
+- Brand selector in ProductForm: dropdown with all brands + "Create new brand" inline option
+- Brands management section in Products page: list, create, delete
+- Global brands (tenant_id = null) shown as read-only with "Global" badge
+
+**A3 — Admin area backend**
+- V4__add_admin_role.sql: role column on stores (STORE | ADMIN)
+- AdminAuthFilter: validates JWT + role=ADMIN for /api/admin/**
+- JwtService updated: role claim included in token
+- AdminController: GET /metrics, GET/PATCH /stores, GET/POST /brands, POST /brands/{id}/size-charts, GET /recommendations
+- AdminService: platform-wide aggregations (no tenant_id filter)
+- ApiKeyAuthFilter updated: checks store status=ACTIVE
+- POST /api/admin/seed: creates first admin, returns 409 if already exists
+- scripts/create-admin.sh
+
+**A4 — Admin area frontend**
+- /admin route group with dark sidebar
+- Platform Overview, Stores, Global Brands, Recommendations pages
+- useAdminGuard hook on every admin page
+- Role-based redirect in middleware and login/register pages
+- Admin API methods in lib/api.ts, types in types.ts
+- Known limitation: store detail drawer shows recommendation history only — full product list endpoint pending (add in Phase 8 backend work)
+
+**A5 — Swagger/OpenAPI**
+- springdoc-openapi-starter-webmvc-ui added to pom.xml
+- /swagger-ui/**, /v3/api-docs/** permitted in SecurityConfig
+- Accessible at http://localhost:8080/swagger-ui.html
+
 ## Current Phase
-Phase A — Critical Fixes
-
-## Phase A Status
-
-### Fix A1a — SecretKeyAuthFilter scope ⏳ IN PROGRESS
-- Problem: SecretKeyAuthFilter intercepts ALL /api/dashboard/** causing slow pages and blocked requests
-- Fix: Add shouldNotFilter() scoping filter to /api/dashboard/v1/size-charts/ only
-- Status: Fix written, pending Docker rebuild
-
-### Fix A1b — brandId optional in ProductService ⏳ IN PROGRESS
-- Problem: ProductService throws BRAND_NOT_FOUND when no brand exists, blocking product creation
-- Fix: brandId null = create product without brand (valid scenario)
-- Status: Fix written, pending Docker rebuild
-
-### Fix A2 — Brand management UI 🔲 PENDING
-- Problem: Store owners cannot create brands from dashboard — must use curl
-- Fix: Add brand selector to ProductForm + brand management section in Products page
-- Blocked by: A1b must be applied first
-
-### Fix A3 — Admin area backend 🔲 PENDING
-- Implement /api/admin/v1/** endpoints
-- Role-based JWT (STORE | ADMIN)
-- Seed script for first admin account
-
-### Fix A4 — Admin area frontend 🔲 PENDING
-- /admin route group in Next.js
-- Stores list, global brands, platform metrics
-
-### Fix A5 — Swagger/OpenAPI 🔲 PENDING
-- Add springdoc-openapi-starter-webmvc-ui
-- Permit /swagger-ui/** in SecurityConfig
-
-## Docker Rebuild Workflow
-Every time backend code changes, run:
-```bash
-docker compose down
-mvn clean package -DskipTests
-docker compose up --build -d
-docker logs devcontext-fitvision-backend-1 --tail 30
-```
+Phase 8 — Shopify App
 
 ## Remaining Phases
 
-### Phase A — Critical Fixes (current)
-See Phase A Status above.
-
-### Phase 8 — Shopify App
-- Shopify CLI + @shopify/shopify-api (Node.js/Express, separate /shopify-app directory)
+### Phase 8 — Shopify App (next to execute)
+- Shopify CLI + @shopify/shopify-api (Node.js/Express, /shopify-app directory)
 - OAuth flow: install → consent → callback → FitVision account link
 - Automatic product sync on install
 - Webhook handlers: products/create, products/update, products/delete
@@ -536,26 +544,27 @@ See Phase A Status above.
 - New backend: ShopifyController (/api/shopify/**)
 
 ### Phase 9 — Scraping Pipeline
-- Playwright Java scraper for major brands (Zara, H&M, Pull&Bear, Mango)
-- Spring Scheduler: runs every Monday at 2am, scrapes brands older than 30 days
-- ScrapeJob entity: tracks status, pages scraped, entries found, errors
+- Playwright Java scraper for Zara, H&M, Pull&Bear, Mango
+- Spring Scheduler: every Monday at 2am
+- ScrapeJob entity: status, pages scraped, entries found, errors
 - Admin trigger: POST /api/admin/v1/brands/{id}/scrape
 - V6 migration: scrape_jobs table, scrape_source_url on size_charts
-- Robots.txt compliance, max 1 request per 3 seconds per domain
+- Robots.txt compliance, max 1 request per 3 seconds
 - BrandScraperRegistry: resolves scraper by brand slug
+- Admin scrape UI: last scraped, trigger button, history drawer
 
 ### Phase 10 — Billing & Subscriptions
-- Stripe subscriptions: Free, Starter €29/mo, Pro €79/mo, Team €149/mo
+- Stripe: Free, Starter €29/mo, Pro €79/mo, Team €149/mo
 - Stripe webhook handlers: subscription created/updated/cancelled
 - Plan enforcement: check limits before product creation and recommendations
-- Billing UI in store dashboard settings
-- Admin view: subscription status per store
+- Billing UI in store settings
+- Admin subscription view per store
 
 ### Phase 11 — Production Deployment
 - Railway (backend) + Vercel (dashboard) + Cloudflare CDN (widget)
 - Neon PostgreSQL (production, serverless)
 - Cloudflare R2 (file storage for size chart uploads)
-- Resend (transactional email)
+- Resend (transactional email: welcome, API key regenerated, plan upgraded)
 - SSL + custom domains: fitvision.io, app.fitvision.io, api.fitvision.io
 - CI/CD: GitHub Actions → build → test → deploy
 - Environment variables audit
@@ -569,21 +578,21 @@ See Phase A Status above.
 
 ## Admin Area — Full Specification
 
-### Level 1 — Operational (Phase A3/A4)
+### Level 1 — Operational ✅ DONE (Phase A3/A4)
 - View all registered stores with metrics
 - Activate / deactivate any store
 - Platform-wide metrics (total stores, recommendations, avg confidence)
-- Manage global brands (create, edit, upload size charts)
+- Manage global brands and size charts
 - Global size charts available to all stores automatically
 
 ### Level 2 — Business (Phase 10)
-- View subscription status per store
-- Override plan manually
-- View revenue metrics
-- Impersonate store for support (read-only)
+- Subscription status per store
+- Plan override manually
+- Revenue metrics
+- Store impersonation for support (read-only)
 
 ### Level 3 — Technical (Phase 12)
-- View recommendation logs across all tenants
+- Recommendation logs across all tenants
 - Force re-scrape per brand
 - Scraping pipeline status
 - System health dashboard
@@ -596,43 +605,38 @@ See Phase A Status above.
 - Seed endpoint returns 409 if any admin already exists
 - All admin actions logged with adminStoreId and timestamp
 
+## Docker Rebuild Workflow
+Every time backend code changes:
+```bash
+docker compose down
+mvn clean package -DskipTests
+docker compose up --build -d
+docker logs devcontext-fitvision-backend-1 --tail 30
+```
+
 ## Real-World Testing Notes
 - Zara T-Shirt Slim Fit Básica /01 size chart tested
-- CSV format validated: size_label, chest_min/max (waist/hip/height left empty for tops)
-- Peça measurements converted to body measurements: subtract 4cm min, add 2cm max
-- Brand creation currently requires curl — blocked until Fix A2
+- CSV format: size_label, chest_min/max (waist/hip/height empty for tops)
+- Peça → body measurements: subtract 4cm min, add 2cm max
+- Brand creation now available in dashboard (A2 complete)
 
 ## Decisions Made
-- JWT chosen over Keycloak — simpler, no external dependency
-- Singleton Testcontainers — static block starts container once per JVM
-- SecretKeyAuthFilter retained on /size-charts/** only — backward compatible with Phase 4 tests
-- GDPR: body measurements stored as BigDecimal.ZERO when storeBodyData=false
-- Widget CSS injected into JS bundle — single file, no separate CSS
-- Token stored in localStorage + cookie mirror for Next.js middleware compatibility
-- Docker Compose for local dev; Railway for production backend
-- brandId optional — product can exist without brand association
+- JWT chosen over Keycloak
+- Singleton Testcontainers — static block, one container per JVM
+- SecretKeyAuthFilter scoped to /size-charts/** only
+- GDPR: body measurements zeroed when storeBodyData=false
+- Widget CSS injected into JS bundle
+- Token: localStorage + cookie mirror for middleware
+- Docker Compose for local dev; Railway for production
+- brandId optional — product can exist without brand
+- Admin account only via seed script, never via public register
 
 ## Decisions Pending
 - Pricing tiers finalisation
-- Which brands in initial FitVision-managed database (Zara confirmed; H&M, Pull&Bear, Mango planned)
+- Initial brand database (Zara confirmed; H&M, Pull&Bear, Mango planned)
 - Stripe integration timing (Phase 10)
-- Admin seed password: stored in .env, never committed to git
-- Production database: Neon serverless vs dedicated Railway PostgreSQL
-# FitVision — Phase 1 Prompts
-
----
-
-## Prompt 1.1 — Spring Boot Project Setup
-
-### CONTEXT
-We are building FitVision, a multi-tenant SaaS that provides size recommendation widgets for online clothing stores. The backend is Spring Boot 3.x with Java 21. The system has two API surfaces: a public widget API (API key auth) and a store dashboard API (JWT auth). All data is tenant-scoped.
-
-Stack: Java 21, Spring Boot 3.x, PostgreSQL, Flyway, Maven, Spring Security, Spring Data JPA.
-
-### OBJECTIVE
-Generate the complete Maven project structure for the FitVision backend with the following:
-- pom.xml with all required dependencies (Spring Boot Web, Data JPA, Security, Flyway, PostgreSQL driver, Validation, Lombok)
-- Main application class
+- Production database: Neon vs Railway PostgreSQL
+- Store detail endpoint for admin drawer (add during Phase 8 backend work)
 - Application properties for dev profile (database connection to localhost PostgreSQL, Flyway enabled, JPA DDL auto = validate)
 - Package structure exactly as defined below
 

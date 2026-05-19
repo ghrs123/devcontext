@@ -37,5 +37,17 @@ services:
     ports:
       - "8080:8080"
 
+  fitvision-dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - fitvision-backend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    ports:
+      - "3000:3000"
+
 volumes:
   fitvision_db_data:
