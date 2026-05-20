@@ -76,11 +76,12 @@ public class ScraperService {
     }
 
     @Transactional
-    public void runScheduledScrapes() {
+    public ScrapeBatchReport runScheduledScrapes() {
+        long startedAtMs = System.currentTimeMillis();
         LocalDateTime cutoff = LocalDateTime.now().minusDays(30);
         List<Brand> brands = brandRepository.findGlobalBrandsNeedingScrape(cutoff);
         if (brands.isEmpty()) {
-            return;
+            return ScrapeBatchReport.empty();
         }
 
         UUID executorAdminStoreId = storeRepository.findFirstByRoleAndStatus(ROLE_ADMIN, STATUS_ACTIVE)
@@ -89,12 +90,34 @@ public class ScraperService {
 
         if (executorAdminStoreId == null) {
             log.warn("Skipping scheduled scrape: no ACTIVE ADMIN store found");
-            return;
+            return ScrapeBatchReport.empty();
         }
 
+        int completedJobs = 0;
+        int failedJobs = 0;
+        int totalEntriesFound = 0;
+        int totalPagesScraped = 0;
+
         for (Brand brand : brands) {
-            executeScrape(brand, executorAdminStoreId);
+            ScrapeJob job = executeScrape(brand, executorAdminStoreId);
+            totalEntriesFound += safeInt(job.getEntriesFound());
+            totalPagesScraped += safeInt(job.getPagesScraped());
+            if (job.getStatus() == ScrapeJobStatus.COMPLETED) {
+                completedJobs++;
+            } else if (job.getStatus() == ScrapeJobStatus.FAILED) {
+                failedJobs++;
+            }
         }
+
+        long durationMs = System.currentTimeMillis() - startedAtMs;
+        return new ScrapeBatchReport(
+                brands.size(),
+                completedJobs,
+                failedJobs,
+                totalEntriesFound,
+                totalPagesScraped,
+                durationMs
+        );
     }
 
     private ScrapeJob executeScrape(Brand brand, UUID executorStoreId) {
@@ -211,5 +234,9 @@ public class ScraperService {
 
     private String templateExternalProductId(UUID brandId) {
         return "__global_brand__" + brandId;
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
     }
 }

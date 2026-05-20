@@ -397,14 +397,14 @@ sizeChartRepository.findById(id);
 # FitVision — Build Progress
 
 ## Current Status
-Phase 8 — Shopify App. Prompts 8.1, 8.2 and 8.3 generated and ready to execute. Phase A fully complete. All fixes applied, admin area operational.
+Phase 9 — Scraping Pipeline. Prompts generated and ready to execute. Phases 1–8 fully complete.
 
 ## What Has Been Built
 
 ### Backend (Spring Boot 3.x, Java 21)
 - 80+ production classes
 - 77 tests passing (45 unit + 32 integration)
-- 4 Flyway migrations (V1, V2, V3, V4)
+- 8 Flyway migrations (V1–V8)
 - Running in Docker via docker-compose
 
 ### Widget (Vanilla JS + Vite)
@@ -431,6 +431,15 @@ Phase 8 — Shopify App. Prompts 8.1, 8.2 and 8.3 generated and ready to execute
 - Global Brands: create, edit, delete, size chart upload, version history
 - Recommendations Log: filters by store, quality, date range, pagination
 - useAdminGuard hook: validates role, clears token + redirects on 401/403
+
+### Shopify App (Node.js/Express)
+- OAuth flow: install → consent → callback → FitVision account linked
+- Product sync: Shopify catalogue → FitVision (idempotent, category mapping)
+- Webhooks: products/create, products/update, products/delete, app/uninstalled (HMAC validated)
+- Widget injection: ScriptTag API (idempotent)
+- Admin JWT: cached in memory, refreshed every 20h
+- Uninstall: deactivates store, data preserved, reinstall reactivates
+- README with full ngrok local dev setup
 
 ## Completed Phases
 
@@ -466,10 +475,10 @@ Phase 8 — Shopify App. Prompts 8.1, 8.2 and 8.3 generated and ready to execute
 - SizeChartService: versioned uploads, manual entry
 - POST /upload, POST /manual, GET /active, DELETE /active
 - File size limit: 2MB
-- End-to-end: upload CSV → widget returns valid size recommendation
 
 ### Phase 5 — Store Dashboard API ✅
 - JWT auth: register, login, BCrypt strength 12, 24h token
+- V2__add_store_password.sql, V3__add_product_soft_delete.sql
 - StoreController: GET/PATCH /profile, GET /api-keys, POST /api-keys/regenerate
 - ProductController: full CRUD with soft delete
 - AnalyticsController: summary + paginated list
@@ -491,79 +500,91 @@ Phase 8 — Shopify App. Prompts 8.1, 8.2 and 8.3 generated and ready to execute
 
 ### Phase A — Critical Fixes + Admin Area ✅
 
+**Migrations:**
+- V4__add_admin_role.sql: role column on stores (STORE | ADMIN)
+- V5__make_product_brand_optional.sql: brandId nullable on products
+- V6__add_brand_soft_delete.sql: soft delete on brands
+
 **A1a — SecretKeyAuthFilter scope**
 - shouldNotFilter() scoped to /api/dashboard/v1/size-charts/ only
-- Dashboard routes no longer blocked
 
 **A1b — brandId optional in ProductService**
-- Products can be created without brand association
-- BRAND_NOT_FOUND only thrown when brandId explicitly provided but not found
+- Products can be created without brand — BRAND_NOT_FOUND only when brandId explicitly provided
 
 **A2 — Brand management UI**
 - BrandController: GET /brands, POST /brands (tenant-scoped, slug auto-generated)
 - Brand selector in ProductForm with inline create option
-- Brands management section in Products page
 - Global brands shown as read-only with "Global" badge
 
 **A3 — Admin area backend**
-- V4__add_admin_role.sql: role column on stores (STORE | ADMIN)
-- AdminAuthFilter: validates JWT + role=ADMIN for /api/admin/**
-- JwtService updated: role claim included in token
-- AdminController: /metrics, /stores, /brands, /recommendations endpoints
+- AdminAuthFilter: JWT + role=ADMIN for /api/admin/**
+- JwtService: role claim in token
+- AdminController: /metrics, /stores, /brands, /recommendations
 - AdminService: platform-wide aggregations (no tenant_id filter)
-- ApiKeyAuthFilter updated: checks store status=ACTIVE
-- POST /api/admin/seed: creates first admin, returns 409 if exists
-- scripts/create-admin.sh
+- POST /api/admin/seed + scripts/create-admin.sh
 
 **A4 — Admin area frontend**
 - /admin route group with dark sidebar
 - Platform Overview, Stores, Global Brands, Recommendations pages
-- useAdminGuard hook on every admin page
-- Role-based redirect in middleware and login/register
-- Admin API methods in lib/api.ts, types in types.ts
-- Known limitation: store detail drawer shows recommendation history only — full product list endpoint deferred
+- useAdminGuard hook, role-based redirect in middleware
 
 **A5 — Swagger/OpenAPI**
-- springdoc-openapi-starter-webmvc-ui added
+- springdoc-openapi-starter-webmvc-ui
 - Accessible at http://localhost:8080/swagger-ui.html
 
-## Current Phase
-Phase 8 — Shopify App (prompts generated, ready to execute)
+### Phase 8 — Shopify App ✅
 
-## Phase 8 Status
+**8.1 — Setup + OAuth**
+- V7__add_shopify_fields.sql: shopify_shop (unique) + shopify_access_token_encrypted
+- ShopifyService: AES-256-GCM encrypt/decrypt
+- ShopifyController: POST /api/shopify/connect + GET /api/shopify/status
+- /shopify-app: Express + @shopify/shopify-api@^11, OAuth flow complete
 
-### 8.1 — Setup + OAuth 🔲 PENDING
-- /shopify-app directory, Node.js/Express, @shopify/shopify-api
-- OAuth flow: install → consent → callback → FitVision account linked
-- Backend: V5 migration, ShopifyController, ShopifyService (AES-256)
-- Shared secret validation between Shopify App and FitVision backend
-
-### 8.2 — Product Sync + Widget Injection 🔲 PENDING
-- fitvision.js: API client for backend calls
-- sync.js: fetch all Shopify products → create in FitVision (idempotent)
-- webhooks.js: products/create, update, delete (HMAC validated)
+**8.2 — Product Sync + Widget Injection**
+- sync.js: Shopify → FitVision product sync (idempotent, category mapping)
+- webhooks.js: products/create, update, delete (HMAC validated, async processing)
 - inject.js: ScriptTag API injection (idempotent)
-- app.html: embedded UI (status, sync button, integration guide)
-- Admin JWT cached in memory, refreshed every 20h
+- app.html: embedded UI with status, sync button, integration guide
 
-### 8.3 — Uninstall + Local Dev 🔲 PENDING
-- app/uninstalled webhook → deactivate store (data preserved)
+**8.3 — Uninstall + Local Dev**
+- app/uninstalled: HMAC validated, deactivates store via admin API, data preserved
 - Reinstall reactivates store in ShopifyController
-- /shopify-app/README.md with ngrok setup instructions
-- Phase 8 completion checklist
+- Admin JWT: cached in memory, refreshed every 20h
+- README.md: full ngrok local dev setup with troubleshooting
+
+## Current Phase
+Phase 9 — Scraping Pipeline (prompts generated, ready to execute)
+
+## Phase 9 Status
+
+### 9.1 — Scraper Infrastructure + Zara 🔲 PENDING
+### 9.2 — Admin Scrape Endpoints + UI 🔲 PENDING
+### 9.3 — H&M, Pull&Bear, Mango Scrapers 🔲 PENDING
+
+## Flyway Migration History
+```
+V1 — init_schema                  Phase 1
+V2 — add_store_password           Phase 5
+V3 — add_product_soft_delete      Phase 5
+V4 — add_admin_role               Phase A3
+V5 — make_product_brand_optional  Phase A1b
+V6 — add_brand_soft_delete        Phase A2
+V7 — add_shopify_fields           Phase 8.1
+V8 — add_scrape_jobs              Phase 9.1 (next)
+```
 
 ## Remaining Phases
 
-### Phase 9 — Scraping Pipeline
-- Playwright Java scraper for Zara, H&M, Pull&Bear, Mango
-- Spring Scheduler: every Monday at 2am, skips brands scraped < 30 days ago
-- ScrapeJob entity: status (PENDING/RUNNING/COMPLETED/FAILED), pages scraped, entries found, error
-- Admin trigger: POST /api/admin/v1/brands/{id}/scrape
-- Admin UI: last scraped date, trigger button, history drawer per brand
-- V6 migration: scrape_jobs table, scrape_source_url on size_charts
-- BrandScraperRegistry: resolves scraper by brand slug
-- Robots.txt compliance, max 1 request per 3 seconds per domain
-- Failed scrape does not overwrite existing active size chart
+### Phase 9 — Scraping Pipeline (next)
+- V8 migration: scrape_jobs table, scrape_source_url + last_scraped_at on size_charts
+- BrandScraper interface + BrandScraperRegistry (Spring DI auto-discovery)
+- ZaraScraper: robots.txt check, rate limit 3s, garment→body conversion
+- HMScraper, PullAndBearScraper, MangoScraper
+- AbstractBrandScraper: shared robots.txt, rate limiting, Playwright setup
+- ScraperService: executeScrape(), failed scrape never overwrites active chart
+- ScrapeScheduler: every Monday 2am, sequential, skips brands scraped < 30 days
+- Admin endpoints: POST /brands/{id}/scrape (async), GET /brands/{id}/scrape-jobs
+- Admin UI: last scraped date, stale badge, scrape now button, history drawer
 
 ### Phase 10 — Billing & Subscriptions
 - Stripe: Free (2 products), Starter €29/mo, Pro €79/mo, Team €149/mo
@@ -580,7 +601,7 @@ Phase 8 — Shopify App (prompts generated, ready to execute)
 - Resend (transactional email: welcome, API key regenerated, plan upgraded)
 - SSL + custom domains: fitvision.io, app.fitvision.io, api.fitvision.io
 - CI/CD: GitHub Actions → build → test → deploy
-- Environment variables audit (JWT secret, DB URL, Stripe keys, Shopify keys)
+- Environment variables audit
 
 ### Phase 12 — Observability & Operations
 - Structured logging with correlation IDs
@@ -620,7 +641,6 @@ Phase 8 — Shopify App (prompts generated, ready to execute)
 - All admin actions logged with adminStoreId and timestamp
 
 ## Docker Rebuild Workflow
-Every time backend code changes:
 ```bash
 docker compose down
 mvn clean package -DskipTests
@@ -632,7 +652,6 @@ docker logs devcontext-fitvision-backend-1 --tail 30
 - Zara T-Shirt Slim Fit Básica /01 size chart tested end-to-end
 - CSV format: size_label, chest_min/max (waist/hip/height empty for tops)
 - Peça → body measurements: subtract 4cm min, add 2cm max
-- Brand creation available in dashboard (A2 complete)
 
 ## Decisions Made
 - JWT chosen over Keycloak
@@ -644,413 +663,19 @@ docker logs devcontext-fitvision-backend-1 --tail 30
 - Docker Compose for local dev; Railway for production
 - brandId optional — product can exist without brand
 - Admin account only via seed script, never via public register
-- Shopify access tokens encrypted AES-256 in database
+- Shopify access tokens encrypted AES-256-GCM in database
 - Shared secret (X-FitVision-Shopify-Secret) validates Shopify App → Backend calls
 - Uninstall deactivates store, never deletes — data always preserved
 - Reinstall reactivates existing store in ShopifyController
+- Scraping: robots.txt check mandatory, 3s rate limit, failed scrape never overwrites active chart
+- Next migration: V9 (V8 used for scrape_jobs)
 
 ## Decisions Pending
 - Pricing tiers finalisation
-- Initial brand database (Zara confirmed; H&M, Pull&Bear, Mango planned)
+- Initial brand database (Zara confirmed; H&M, Pull&Bear, Mango planned for Phase 9.3)
 - Stripe integration timing (Phase 10)
 - Production database: Neon vs Railway PostgreSQL
-- Store detail endpoint for admin drawer (add during Phase 9 or standalone)
-- Initial brand database (Zara confirmed; H&M, Pull&Bear, Mango planned)
-- Stripe integration timing (Phase 10)
-- Production database: Neon vs Railway PostgreSQL
-- Store detail endpoint for admin drawer (add during Phase 8 backend work)
-- Application properties for dev profile (database connection to localhost PostgreSQL, Flyway enabled, JPA DDL auto = validate)
-- Package structure exactly as defined below
-
-### PACKAGE STRUCTURE
-```
-com.fitvision
-├── api
-│   ├── widget
-│   ├── dashboard
-│   └── webhook
-├── domain
-│   ├── store
-│   ├── brand
-│   ├── product
-│   ├── sizechart
-│   └── recommendation
-├── engine
-│   └── recommendation
-├── integration
-│   ├── shopify
-│   └── scraper
-├── infrastructure
-│   ├── persistence
-│   ├── security
-│   └── storage
-└── shared
-    ├── exception
-    ├── validation
-    └── response
-```
-
-### CONSTRAINTS
-- Java 21
-- Spring Boot 3.x (latest stable)
-- No Spring Boot DevTools in production profile
-- Lombok for boilerplate reduction
-- No test dependencies beyond Spring Boot Test and JUnit 5
-
-### EXPECTED OUTPUT
-- Complete pom.xml
-- FitVisionApplication.java
-- application.yml (dev profile)
-- One placeholder class per package to establish structure (can be empty with a comment)
-
-### NEXT STEP
-Prompt 1.2 will create the database schema via Flyway migrations. The application.yml from this prompt will be used directly.
-
----
-
-## Prompt 1.2 — Database Schema (Flyway Migrations)
-
-### CONTEXT
-FitVision backend is set up with Spring Boot 3.x, Java 21, PostgreSQL, and Flyway. The project structure and pom.xml are complete.
-
-The system is multi-tenant. Every tenant-scoped table has a tenant_id column. Recommendations are stored for analytics with a GDPR consent flag.
-
-### OBJECTIVE
-Create Flyway migration file V1__init_schema.sql with the complete initial database schema.
-
-### ENTITIES TO CREATE
-
-**stores** — tenant table
-- id (UUID, PK), name, email, plan (VARCHAR), status (VARCHAR)
-- api_key_public (VARCHAR UNIQUE), api_key_secret (VARCHAR)
-- platform (VARCHAR — shopify/woocommerce/other)
-- subscription_status (VARCHAR), created_at, updated_at
-
-**brands**
-- id (UUID, PK), tenant_id (UUID, nullable — null means FitVision-managed global brand)
-- name (VARCHAR), slug (VARCHAR UNIQUE), source (VARCHAR — fitvision_managed/store_uploaded)
-- last_scraped_at (TIMESTAMP, nullable), created_at
-
-**products**
-- id (UUID, PK), brand_id (UUID FK), tenant_id (UUID FK → stores)
-- external_product_id (VARCHAR — Shopify product ID etc.)
-- name (VARCHAR), category (VARCHAR), gender_target (VARCHAR)
-- created_at, updated_at
-- UNIQUE(tenant_id, external_product_id)
-
-**size_charts**
-- id (UUID, PK), product_id (UUID FK), version (INTEGER)
-- source (VARCHAR — uploaded/scraped/manual), active (BOOLEAN DEFAULT false)
-- created_at
-
-**size_entries**
-- id (UUID, PK), size_chart_id (UUID FK)
-- size_label (VARCHAR — S/M/L/XL or numeric)
-- chest_min, chest_max (DECIMAL 5,1, nullable)
-- waist_min, waist_max (DECIMAL 5,1, nullable)
-- hip_min, hip_max (DECIMAL 5,1, nullable)
-- height_min, height_max (DECIMAL 5,1, nullable)
-
-**recommendation_requests**
-- id (UUID, PK), tenant_id (UUID FK), product_id (UUID FK)
-- height_cm (DECIMAL 5,1), weight_kg (DECIMAL 5,1)
-- gender (VARCHAR, nullable), age (INTEGER, nullable)
-- recommended_size (VARCHAR), confidence_score (DECIMAL 3,2)
-- body_measurements_stored (BOOLEAN DEFAULT false)
-- created_at
-
-### CONSTRAINTS
-- All PKs are UUID generated by the application (not serial/auto-increment)
-- All timestamps default to NOW()
-- Add indexes on: stores.api_key_public, products.tenant_id, recommendation_requests.tenant_id, recommendation_requests.product_id
-- File location: src/main/resources/db/migration/V1__init_schema.sql
-
-### EXPECTED OUTPUT
-Complete V1__init_schema.sql ready to run via Flyway.
-
-### NEXT STEP
-Prompt 1.3 will create the JPA entity classes mapped to this schema.
-
----
-
-## Prompt 1.3 — JPA Entity Classes
-
-### CONTEXT
-FitVision backend with Spring Boot 3.x, Java 21. Database schema is created (V1__init_schema.sql). Tables: stores, brands, products, size_charts, size_entries, recommendation_requests. All PKs are UUID. Multi-tenant system — tenant_id on every tenant-scoped entity.
-
-Lombok is available. Use @Data, @Builder, @NoArgsConstructor, @AllArgsConstructor where appropriate.
-
-### OBJECTIVE
-Create all JPA entity classes mapped to the existing schema.
-
-### CONSTRAINTS
-- Package: com.fitvision.domain.{entityname}
-- All entities use UUID as ID type
-- No Lombok on entities that have JPA relationships — use explicit getters/setters to avoid Lombok/JPA conflicts
-- Use @Column(name = "...") explicitly on every field — do not rely on naming convention
-- No cascading deletes on recommendation_requests — analytical data must be preserved
-- size_label must always be stored in uppercase — enforce via @PrePersist and @PreUpdate
-
-### EXPECTED OUTPUT
-- Store.java
-- Brand.java
-- Product.java
-- SizeChart.java
-- SizeEntry.java
-- RecommendationRequest.java
-
-Each in their respective domain package. All mapped to the exact schema from V1__init_schema.sql.
-
-### NEXT STEP
-Prompt 1.4 will create the repository interfaces and the base tenant-scoped query pattern.
-
----
-
-## Prompt 1.4 — Repository Layer with Tenant Isolation
-
-### CONTEXT
-FitVision backend. JPA entities are complete: Store, Brand, Product, SizeChart, SizeEntry, RecommendationRequest. The system is multi-tenant — every query on tenant-scoped data must include tenant_id.
-
-### OBJECTIVE
-Create Spring Data JPA repository interfaces for all entities, enforcing the tenant isolation pattern.
-
-### TENANT ISOLATION RULE
-Every method that accesses tenant-scoped data (Product, SizeChart, SizeEntry, RecommendationRequest) MUST include tenantId as a parameter. There must be no method that retrieves tenant-scoped data without the tenantId filter.
-
-### REPOSITORIES TO CREATE
-
-**StoreRepository** (JpaRepository<Store, UUID>)
-- findByApiKeyPublic(String apiKeyPublic): Optional<Store>
-- findByEmail(String email): Optional<Store>
-
-**BrandRepository** (JpaRepository<Brand, UUID>)
-- findBySlug(String slug): Optional<Brand>
-- findAllByTenantIdOrTenantIdIsNull(UUID tenantId): List<Brand> — returns store's brands + global FitVision brands
-- findByIdAndTenantIdOrTenantIdIsNull(UUID id, UUID tenantId): Optional<Brand>
-
-**ProductRepository** (JpaRepository<Product, UUID>)
-- findByIdAndTenantId(UUID id, UUID tenantId): Optional<Product>
-- findAllByTenantId(UUID tenantId): List<Product>
-- findByExternalProductIdAndTenantId(String externalProductId, UUID tenantId): Optional<Product>
-
-**SizeChartRepository** (JpaRepository<SizeChart, UUID>)
-- findActiveByProductIdAndTenantId(UUID productId, UUID tenantId): Optional<SizeChart> — only active=true
-
-**SizeEntryRepository** (JpaRepository<SizeEntry, UUID>)
-- findAllBySizeChartId(UUID sizeChartId): List<SizeEntry>
-
-**RecommendationRequestRepository** (JpaRepository<RecommendationRequest, UUID>)
-- countByTenantIdAndCreatedAtAfter(UUID tenantId, LocalDateTime after): long
-- findAllByTenantId(UUID tenantId, Pageable pageable): Page<RecommendationRequest>
-
-### CONSTRAINTS
-- Package: com.fitvision.infrastructure.persistence
-- Use @Query with JPQL where Spring Data method naming is not sufficient
-- No native SQL queries at this stage
-
-### EXPECTED OUTPUT
-All 6 repository interfaces in com.fitvision.infrastructure.persistence.
-
-### NEXT STEP
-Prompt 1.5 will create the API response envelope, base exception classes, and global exception handler.
-
----
-
-## Prompt 1.5 — Shared Infrastructure (Response Envelope + Exception Handling)
-
-### CONTEXT
-FitVision backend. Project structure, schema, entities, and repositories are complete. Before building any API endpoint, we need the shared response envelope and exception handling that all endpoints will use.
-
-### OBJECTIVE
-Create the complete shared infrastructure for API responses and error handling.
-
-### COMPONENTS TO CREATE
-
-**1. ApiResponse<T> (generic response envelope)**
-```json
-{
-  "success": true/false,
-  "data": { } or null,
-  "error": null or { "code": "...", "message": "...", "field": null },
-  "meta": { "requestId": "uuid", "timestamp": "ISO-8601" }
-}
-```
-- Static factory methods: ApiResponse.ok(T data), ApiResponse.error(ErrorCode code, String message)
-- Package: com.fitvision.shared.response
-
-**2. ErrorCode enum**
-Initial values: SIZE_CHART_NOT_FOUND, PRODUCT_NOT_FOUND, STORE_NOT_FOUND, INVALID_API_KEY, INVALID_BODY_MEASUREMENTS, BRAND_NOT_FOUND, UNAUTHORIZED, VALIDATION_ERROR, INTERNAL_ERROR
-- Package: com.fitvision.shared.exception
-
-**3. FitVisionException (base runtime exception)**
-- Fields: ErrorCode errorCode, String message
-- Package: com.fitvision.shared.exception
-
-**4. Specific exceptions extending FitVisionException**
-- SizeChartNotFoundException
-- ProductNotFoundException
-- StoreNotFoundException
-- InvalidApiKeyException
-- InvalidBodyMeasurementException
-
-**5. GlobalExceptionHandler (@RestControllerAdvice)**
-- Handles FitVisionException → correct ErrorCode and HTTP status
-- Handles MethodArgumentNotValidException → VALIDATION_ERROR with field name
-- Handles generic Exception → INTERNAL_ERROR, never expose stack trace
-- All responses use ApiResponse envelope
-- Log all exceptions with request ID
-
-**6. RequestIdFilter (OncePerRequestFilter)**
-- Generates UUID request ID per request
-- Stores in MDC for logging
-- Adds X-Request-Id response header
-
-### CONSTRAINTS
-- Never expose stack traces in responses
-- HTTP status mapping: NOT_FOUND exceptions → 404, UNAUTHORIZED → 401, VALIDATION → 400, INTERNAL → 500
-- Package: com.fitvision.shared.*
-
-### EXPECTED OUTPUT
-All classes listed above, fully implemented and ready to use by any controller.
-
-### NEXT STEP
-Phase 1 is complete. Phase 2 will implement the RecommendationEngine — the body composition formulas and size chart matching logic. The shared infrastructure from this prompt will be used by all subsequent API endpoints.
-
-### PHASE 1 COMPLETION CHECKLIST
-Before moving to Phase 2, verify:
-- [ ] Application starts without errors
-- [ ] Flyway migrations run successfully on a local PostgreSQL database
-- [ ] All entities are mapped correctly (spring.jpa.ddl-auto=validate passes)
-- [ ] A simple test endpoint returns the ApiResponse envelope correctly
-- [ ] GlobalExceptionHandler returns the correct format for a thrown FitVisionException
-
----
-
-## Prompt 0 — Infraestrutura Local (pré-requisito)
-
-> Executar ANTES do Prompt 1.1. Não requer IA — são comandos directos.
-
-### OBJECTIVO
-Subir o PostgreSQL localmente via Docker para que o Spring Boot consiga ligar e o Flyway possa executar as migrations.
-
-### COMANDOS
-
-**1. Subir o container PostgreSQL:**
-```bash
-docker run --name fitvision-db \
-  -e POSTGRES_DB=fitvision \
-  -e POSTGRES_USER=fitvision \
-  -e POSTGRES_PASSWORD=fitvision \
-  -p 5432:5432 \
-  -d postgres:16
-```
-
-**2. Verificar que está a correr:**
-```bash
-docker ps
-```
-Deves ver `fitvision-db` com status `Up`.
-
-**3. Para parar e retomar nas próximas sessões:**
-```bash
-# Parar
-docker stop fitvision-db
-
-# Retomar (não precisas de criar novamente)
-docker start fitvision-db
-```
-
-### CHECKLIST
-- [ ] `docker ps` mostra `fitvision-db` com status `Up`
-- [ ] Porta 5432 disponível (não tens outro PostgreSQL a correr)
-- [ ] Só depois disto arrancar o Spring Boot
-
----
-
-## Prompt 1.6 — Docker Setup (Retroactive)
-
-> Executar agora, antes de continuar a Fase 5.2. Objetivo: padronizar ambiente local e facilitar onboarding/execução sem setup manual.
-
-### CONTEXT
-FitVision backend já está funcional em ambiente local. Até aqui, o Docker foi usado apenas para base de dados (Prompt 0). Agora precisamos formalizar a containerização local da aplicação com Dockerfile e Docker Compose.
-
-### OBJECTIVE
-Adicionar suporte completo de execução local via Docker com:
-- Dockerfile multi-stage para o backend Spring Boot
-- docker-compose.yml com backend + PostgreSQL 16
-- volume persistente para dados da base
-- configuração por variáveis de ambiente via ficheiro .env
-- .env.example para onboarding
-- .dockerignore para otimizar build context
-
-### IMPLEMENTATION DETAILS
-
-**1. Dockerfile (multi-stage)**
-- Stage 1 (build): Maven + JDK 21 para compilar e empacotar
-- Stage 2 (runtime): JRE 21 slim para executar o jar
-- Expor porta 8080
-- Entry point: `java -jar app.jar`
-- Gerar imagem pequena e reprodutível
-
-**2. docker-compose.yml (ambiente local completo)**
-Serviços:
-- `fitvision-db`:
-  - imagem `postgres:16`
-  - variáveis `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
-  - volume nomeado para persistência
-  - porta `5432:5432`
-  - healthcheck com `pg_isready`
-- `fitvision-backend`:
-  - build via Dockerfile local
-  - depende de `fitvision-db` saudável
-  - porta `8080:8080`
-  - variáveis de ambiente lidas de `.env`
-  - `SPRING_DATASOURCE_URL` apontando para `fitvision-db:5432`
-
-**3. .env.example**
-Incluir pelo menos:
-- `POSTGRES_DB=fitvision`
-- `POSTGRES_USER=fitvision`
-- `POSTGRES_PASSWORD=fitvision`
-- `SPRING_DATASOURCE_URL=jdbc:postgresql://fitvision-db:5432/fitvision`
-- `SPRING_DATASOURCE_USERNAME=fitvision`
-- `SPRING_DATASOURCE_PASSWORD=fitvision`
-- `FITVISION_JWT_SECRET=CHANGE_THIS_IN_PRODUCTION_MIN_32_BYTES`
-- `FITVISION_JWT_EXPIRATION_HOURS=24`
-
-**4. .dockerignore**
-Ignorar artefactos e ruído de build:
-- `target/`
-- `.git/`
-- `.idea/`
-- `.vscode/`
-- `*.log`
-- `node_modules/`
-
-### CONSTRAINTS
-- Manter Java 21 em build e runtime
-- Não embutir segredos no Dockerfile ou docker-compose.yml
-- Usar `.env` local (não versionado) e `.env.example` versionado
-- Garantir compatibilidade com Flyway no arranque da aplicação
-- Compose deve funcionar com um único comando: `docker compose up --build`
-
-### EXPECTED OUTPUT
-- `Dockerfile`
-- `docker-compose.yml`
-- `.env.example`
-- `.dockerignore`
-- (Opcional) atualização do README com instruções de execução via Docker
-
-### VALIDATION CHECKLIST
-- [ ] `docker compose up --build` inicia `fitvision-db` e `fitvision-backend`
-- [ ] Backend responde em `http://localhost:8080/actuator/health`
-- [ ] Flyway executa migrations automaticamente no startup
-- [ ] Dados da DB persistem após reiniciar os containers
-- [ ] Alterar `FITVISION_JWT_SECRET` via `.env` reflete no runtime
-
-### NEXT STEP
-Com Prompt 1.6 concluído, retomar a implementação da Phase 5.2 (Store Profile + Product Management Endpoints).
-
+- Store detail full product list endpoint (deferred — add in Phase 10 or standalone)
 # FitVision — Phase 2 Prompts: Recommendation Engine
 
 > Pre-condition: Phase 1 complete. Application starts, Flyway migrations run, all entities and repositories exist, ApiResponse envelope and GlobalExceptionHandler are working.
@@ -3211,596 +2836,413 @@ Implement automatic product sync and widget injection into Shopify theme.
 
 # FitVision — Phase 9 Prompts: Scraping Pipeline
 
-> Pre-condition: Phase 8 complete or running in parallel. Admin area operational (admin can trigger scrapes and view results).
+> Pre-condition: Phase 8 complete. Admin area operational. Global brands can be created via admin dashboard. Backend running in Docker. Next migration is V8 (V7 was used for Shopify fields).
 
 ---
 
-## Prompt 9.1 — Scraper Infrastructure + Zara
+## Prompt 9.1 — Scraper Infrastructure + Zara Scraper
 
 ### CONTEXT
-FitVision backend. Global brands exist (created by admin). The scraping pipeline fetches size charts from brand websites and stores them as global size charts.
+FitVision backend (Spring Boot 3.x, Java 21). The scraping pipeline fetches size charts from brand websites and stores them as global size charts (tenant_id = null), available to all stores automatically.
 
-Stack: Spring Scheduler + Playwright Java (already in approved libraries list).
+Scraping constraints (mandatory):
+- Only scrape public size chart pages
+- Always check robots.txt before scraping a new domain
+- Max 1 request per 3 seconds per domain
+- Store scrape_source_url for every scraped size chart
+- Failed scrape must NOT overwrite existing active size chart
+- Flag scraped data as stale after 30 days
 
-New entities needed:
-- ScrapeJob: id, brandId, status (PENDING/RUNNING/COMPLETED/FAILED), startedAt, completedAt, pagesScraped, entriesFound, errorMessage
-- Add last_scraped_at and scrape_source_url to size_charts table
+Stack: Spring Scheduler + Playwright Java.
 
 ### OBJECTIVE
-Build the scraping infrastructure and first scraper (Zara).
+Build the scraping infrastructure, entities, scheduler, and first scraper (Zara men's tops).
 
-**ScraperService** (@Service)
-- Method: ScrapeResult scrape(Brand brand)
-- Uses Playwright to navigate to brand size chart page
-- Extracts size data by category (tops, bottoms, dresses)
-- Returns structured SizeEntryData list per category
-
-**ZaraScraper** (@Component, implements BrandScraper)
-- Navigates to zara.com product size guide pages
-- Extracts size tables for men's tops (starting point)
-- Handles pagination and dynamic content (Playwright waits for element)
-- Respects robots.txt — checks before scraping
-- Rate limit: max 1 request per 3 seconds
-
-**ScrapeScheduler** (@Component)
-- @Scheduled(cron = "0 0 2 * * MON") — runs every Monday at 2am
-- Finds all global brands with last_scraped_at older than 30 days
-- Queues scrape jobs
-- Runs jobs sequentially (no parallel scraping)
-
-**Admin trigger**
-- POST /api/admin/v1/brands/{brandId}/scrape → triggers immediate scrape job
-- GET /api/admin/v1/brands/{brandId}/scrape-jobs → list scrape history
-
-**V6 migration**
+**V8__add_scrape_jobs.sql**
 ```sql
-ALTER TABLE size_charts ADD COLUMN scrape_source_url VARCHAR(500);
+ALTER TABLE size_charts
+    ADD COLUMN scrape_source_url VARCHAR(500),
+    ADD COLUMN last_scraped_at TIMESTAMP;
+
 CREATE TABLE scrape_jobs (
-    id UUID PRIMARY KEY,
-    brand_id UUID REFERENCES brands(id),
-    status VARCHAR(20) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand_id UUID NOT NULL REFERENCES brands(id),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
-    pages_scraped INTEGER DEFAULT 0,
-    entries_found INTEGER DEFAULT 0,
+    pages_scraped INTEGER NOT NULL DEFAULT 0,
+    entries_found INTEGER NOT NULL DEFAULT 0,
     error_message TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_scrape_jobs_brand_id ON scrape_jobs(brand_id);
+CREATE INDEX idx_scrape_jobs_status ON scrape_jobs(status);
+CREATE INDEX idx_size_charts_last_scraped ON size_charts(last_scraped_at);
 ```
 
-### CONSTRAINTS
-- Never scrape faster than 1 request per 3 seconds per domain
-- Always check robots.txt before scraping a new domain
-- Store scrape_source_url for every scraped size chart
-- Failed scrape does not overwrite existing active size chart
-- All scraper code must handle site layout changes gracefully (try-catch per step)
-
-### EXPECTED OUTPUT
-- BrandScraper.java (interface)
-- ZaraScraper.java
-- ScraperService.java
-- ScrapeScheduler.java
-- ScrapeJob.java (entity)
-- ScrapeJobRepository.java
-- Updated AdminController.java (scrape trigger + history endpoints)
-- V6__add_scrape_jobs.sql
-- Updated pom.xml (Playwright dependency if not already present)
-
----
-
-## Prompt 9.2 — Additional Brand Scrapers + Admin Scrape UI
-
-### CONTEXT
-FitVision. Zara scraper working. Infrastructure established. Now adding more brands and admin UI to manage scraping.
-
-### OBJECTIVE
-Add scrapers for H&M, Pull&Bear, Mango. Build admin scrape management UI.
-
-**Additional scrapers**
-- HMScraper.java — hm.com size guide pages
-- PullAndBearScraper.java — pullandbear.com
-- MangoScraper.java — mango.com
-
-**BrandScraperRegistry** (@Component)
-- Map<String, BrandScraper> keyed by brand slug
-- ScraperService resolves correct scraper by brand slug
-- Unknown brands: log warning, skip scrape
-
-**Admin Scrape UI** (admin/brands/page.tsx additions)
-For each global brand:
-- Last scraped date (or "Never")
-- "Scrape now" button → calls POST /api/admin/v1/brands/{id}/scrape
-- Scrape status badge: idle / running / completed / failed
-- Link to scrape history
-- Manual override button: "Edit size chart" (opens same upload drawer as Phase A3)
-
-**Scrape history drawer**
-- List of past scrape jobs with status, timestamp, entries found, error if any
-
-### CONSTRAINTS
-- Each scraper must be independently testable with a mock Playwright browser
-- Scrapers should not fail silently — always update ScrapeJob status
-- Manual override (admin upload) always takes priority over scraped data
-
-### EXPECTED OUTPUT
-- HMScraper.java, PullAndBearScraper.java, MangoScraper.java
-- BrandScraperRegistry.java
-- Updated AdminController.java
-- Updated admin/brands/page.tsx (scrape management UI)
-# FitVision — Phase 8 Prompts: Shopify App
-
-> Pre-condition: Phase A complete. Backend running in Docker with all fixes applied. Admin area operational. Brand management working. Swagger available at /swagger-ui.html.
-
----
-
-## Prompt 8.1 — Shopify App Project Setup + OAuth Flow
-
-### CONTEXT
-FitVision. The Shopify App allows store owners to install FitVision with one click via the Shopify App Store, instead of manually copying a script tag. The app authenticates the store owner via Shopify OAuth and automatically links their Shopify store to a FitVision account.
-
-The Shopify App is a separate Node.js/Express server — NOT part of the Next.js dashboard. It lives in a new /shopify-app directory at the project root.
-
-Architecture:
-- /shopify-app — Node.js/Express app (Shopify App server)
-- Backend receives Shopify events via new /api/shopify/** endpoints (Spring Boot)
-- Dashboard stays at localhost:3000 (unchanged)
-
-Stack for Shopify App:
-- Node.js 20+
-- Express 4
-- @shopify/shopify-api (latest)
-- dotenv
-
-Backend additions (Spring Boot):
-- V5__add_shopify_fields.sql
-- ShopifyController.java (/api/shopify/**)
-
-### OBJECTIVE
-Set up the Shopify App project and implement the OAuth installation flow.
-
-**Project structure**
-```
-/shopify-app
-  ├── src/
-  │   ├── index.js         # Express server entry point
-  │   ├── auth.js          # Shopify OAuth handlers
-  │   ├── fitvision.js     # FitVision API client (calls Spring Boot)
-  │   ├── config.js        # Environment configuration
-  │   └── middleware.js    # HMAC validation, session middleware
-  ├── .env.example
-  ├── .gitignore           # must include .env
-  └── package.json
-```
-
-**config.js**
-```javascript
-export const config = {
-  shopify: {
-    apiKey: process.env.SHOPIFY_API_KEY,
-    apiSecret: process.env.SHOPIFY_API_SECRET,
-    scopes: ['read_products', 'write_script_tags'],
-    hostName: process.env.HOST_NAME, // ngrok or production URL
-    apiVersion: '2024-01',
-  },
-  fitvision: {
-    apiUrl: process.env.FITVISION_API_URL || 'http://localhost:8080',
-    adminEmail: process.env.FITVISION_ADMIN_EMAIL,
-    adminPassword: process.env.FITVISION_ADMIN_PASSWORD,
-  },
-  port: process.env.PORT || 3001,
-};
-```
-
-**.env.example**
-```
-SHOPIFY_API_KEY=your_shopify_api_key
-SHOPIFY_API_SECRET=your_shopify_api_secret
-HOST_NAME=https://your-ngrok-url.ngrok.io
-FITVISION_API_URL=http://localhost:8080
-FITVISION_ADMIN_EMAIL=admin@fitvision.io
-FITVISION_ADMIN_PASSWORD=your_admin_password
-PORT=3001
-```
-
-**OAuth flow (auth.js)**
-
-GET /auth?shop={shop}
-1. Validate shop parameter format (*.myshopify.com)
-2. Generate Shopify OAuth URL with scopes
-3. Redirect store owner to Shopify consent page
-
-GET /auth/callback
-1. Validate HMAC signature from Shopify — reject if invalid
-2. Exchange authorization code for permanent access token via Shopify API
-3. Store access token encrypted in FitVision backend:
-   - Call POST /api/shopify/connect with { shop, accessToken, shopName }
-   - Receive back { jwt, apiKeyPublic } for this store
-4. Store jwt and apiKeyPublic in session
-5. Redirect to embedded app UI at /app
-
-**index.js**
-- Express app with session middleware (express-session, in-memory for dev)
-- Mount routes: /auth, /auth/callback, /app, /webhooks
-- Start server on configured port
-- Log startup info: port, Shopify API key, FitVision URL
-
-**Backend — V5__add_shopify_fields.sql**
-```sql
-ALTER TABLE stores ADD COLUMN shopify_shop VARCHAR(255) UNIQUE;
-ALTER TABLE stores ADD COLUMN shopify_access_token_encrypted TEXT;
-CREATE INDEX idx_stores_shopify_shop ON stores(shopify_shop);
-```
-
-**Backend — ShopifyController.java** (/api/shopify)
-
-POST /api/shopify/connect
-- Request body: { shop (String), accessToken (String), shopName (String) }
-- No auth required (called from Shopify App server, not from browser)
-- Validates request has valid HMAC or shared secret header (X-FitVision-Shopify-Secret)
-- Finds existing store by shopify_shop domain or creates a new one:
-  - New store: generates apiKeyPublic, apiKeySecret, sets name=shopName, platform=shopify
-  - Existing store: updates access token
-- Encrypts accessToken with AES-256 before storing
-- Returns: { jwt, apiKeyPublic, storeId }
-
-GET /api/shopify/status?shop={shop}
-- Returns { connected: boolean, storeId, apiKeyPublic } for a given shop domain
-- Used by the embedded app UI to show connection status
-
-**ShopifyService.java**
-- encryptToken(String token): String — AES-256 encryption
-- decryptToken(String encrypted): String — AES-256 decryption
-- Encryption key loaded from application.yml: fitvision.shopify.encryption-key
-
-### CONSTRAINTS
-- NEVER store Shopify access tokens in plain text — always encrypt
-- HMAC validation is mandatory on /auth/callback — reject any request without valid HMAC
-- X-FitVision-Shopify-Secret header on /api/shopify/connect prevents unauthorized calls
-- .env must never be committed — add to .gitignore
-- session secret in .env for production — never hardcoded
-- shopify_shop column must be unique — one FitVision account per Shopify store
-
-### EXPECTED OUTPUT
-- /shopify-app/package.json
-- /shopify-app/src/index.js
-- /shopify-app/src/auth.js
-- /shopify-app/src/config.js
-- /shopify-app/src/middleware.js
-- /shopify-app/.env.example
-- /shopify-app/.gitignore
-- V5__add_shopify_fields.sql
-- ShopifyController.java
-- ShopifyService.java
-- Updated application.yml (shopify encryption key config)
-
-### NEXT STEP
-Prompt 8.2 will implement product sync and widget injection.
-
----
-
-## Prompt 8.2 — Product Sync + Widget Injection
-
-### CONTEXT
-FitVision Shopify App. OAuth complete. FitVision account linked to Shopify store. JWT and apiKeyPublic stored in session. Shopify access token encrypted in database.
-
-ShopifyService exists with decrypt method.
-FitVision dashboard API at /api/dashboard/v1/products accepts { externalProductId, name, category, genderTarget }.
-
-### OBJECTIVE
-Implement automatic product sync on install and widget injection into Shopify theme.
-
-**fitvision.js — FitVision API client**
-```javascript
-// Wraps all calls to FitVision Spring Boot backend
-async function createProduct(jwt, { externalProductId, name, category })
-async function deleteProduct(jwt, externalProductId)
-async function getProducts(jwt)
-// All methods add Authorization: Bearer {jwt} header
-// All methods target config.fitvision.apiUrl
-```
-
-**sync.js — Product sync**
-
-async function syncAllProducts(shop, jwt)
-1. Fetch all products from Shopify API using stored access token
-2. For each Shopify product:
-   - Map Shopify product type to FitVision category (tops/bottoms/dresses/other)
-   - Call FitVision POST /api/dashboard/v1/products with:
-     - externalProductId: Shopify product ID (as string)
-     - name: Shopify product title
-     - category: mapped category
-     - genderTarget: UNISEX (default — can be refined later)
-3. Log progress: "Synced X of Y products"
-4. Return { synced, failed, total }
-
-Category mapping:
-```javascript
-const categoryMap = {
-  'T-Shirts': 'tops', 'Shirts': 'tops', 'Blouses': 'tops',
-  'Pants': 'bottoms', 'Jeans': 'bottoms', 'Shorts': 'bottoms', 'Skirts': 'bottoms',
-  'Dresses': 'dresses',
-  'Jackets': 'outerwear', 'Coats': 'outerwear',
-};
-// Default: 'other'
-```
-
-**Webhook registration (webhooks.js)**
-
-On successful OAuth (in auth.js after connect), register webhooks:
-- products/create → /webhooks/products/create
-- products/update → /webhooks/products/update
-- products/delete → /webhooks/products/delete
-
-Webhook handlers:
-- products/create: validate HMAC, call FitVision createProduct
-- products/update: validate HMAC, call FitVision updateProduct (name/category)
-- products/delete: validate HMAC, call FitVision deleteProduct (soft delete)
-
-All webhook handlers:
-- Validate X-Shopify-Hmac-SHA256 header before processing
-- Return 200 immediately (Shopify requires fast response)
-- Process asynchronously after responding
-
-**Widget injection (inject.js)**
-
-Function: injectWidget(shop, accessToken, apiKeyPublic)
-- Uses Shopify ScriptTag API to inject the widget script globally
-- Creates ScriptTag with:
-  - src: https://cdn.fitvision.io/widget/fitvision-widget.min.js
-  - display_scope: online_store
-- Checks if ScriptTag already exists before creating (idempotent)
-- Logs result: "Widget ScriptTag created" or "Widget ScriptTag already exists"
-
-Note: The widget reads the product ID from the page — the store owner still needs to add the container div to their product template. The Integration Guide in FitVision Settings shows how.
-
-**Embedded App UI (src/ui/app.html)**
-Simple HTML page served at GET /app:
-- Shows connection status (connected store name + apiKeyPublic)
-- Shows product sync status (last synced, count)
-- "Sync products now" button → POST /app/sync
-- "Open FitVision Dashboard" link → links to app.fitvision.io
-- "View Widget Integration Guide" link → links to FitVision Settings page
-- Uses Shopify App Bridge for embedded UI chrome
-
-POST /app/sync
-- Triggers syncAllProducts for the current session shop
-- Returns { synced, failed, total }
-
-### CONSTRAINTS
-- All webhook handlers must validate HMAC before processing — reject without 401
-- Widget ScriptTag injection is idempotent — check before creating
-- Product sync runs on install and can be triggered manually — must be safe to run multiple times
-- externalProductId must be stored as string (Shopify IDs are large integers)
-- Product sync failures must not block install — log and continue
-
-### EXPECTED OUTPUT
-- /shopify-app/src/sync.js
-- /shopify-app/src/webhooks.js
-- /shopify-app/src/inject.js
-- /shopify-app/src/fitvision.js
-- /shopify-app/src/ui/app.html
-- Updated /shopify-app/src/index.js (webhook routes + /app routes + /app/sync added)
-- Updated /shopify-app/src/auth.js (webhook registration + widget injection on OAuth complete)
-
-### NEXT STEP
-Prompt 8.3 will add app uninstall handling and local development setup with ngrok.
-
----
-
-## Prompt 8.3 — Uninstall Handler + Local Dev Setup
-
-### CONTEXT
-FitVision Shopify App. OAuth, product sync, and widget injection complete.
-
-When a store uninstalls the app:
-- Shopify sends app/uninstalled webhook
-- FitVision should deactivate the store (not delete — preserve data)
-- ScriptTag is automatically removed by Shopify on uninstall
-
-### OBJECTIVE
-Handle app uninstall and document local development setup.
-
-**Uninstall webhook handler**
-
-app/uninstalled webhook:
-1. Validate HMAC
-2. Call FitVision PATCH /api/admin/stores/{storeId}/status with { status: "INACTIVE" }
-   - Uses admin JWT (fetched at startup using admin credentials from config)
-   - Store is deactivated — widget calls return 401
-3. Log: "Store {shop} uninstalled — account deactivated"
-
-Note: Data is preserved. If the store reinstalls, OAuth flow reactivates the account.
-
-**Admin JWT management (fitvision.js addition)**
-
-On app startup:
-- Call POST /api/dashboard/v1/auth/login with admin credentials
-- Cache admin JWT in memory
-- Refresh JWT every 20 hours (before 24h expiry)
-
-**Local development setup (README.md)**
-
-Create /shopify-app/README.md with complete local dev instructions:
-
-```markdown
-# FitVision Shopify App — Local Development
-
-## Prerequisites
-- Node.js 20+
-- ngrok account (free tier works)
-- Shopify Partner account
-- FitVision backend running at localhost:8080
-
-## Setup
-
-1. Install dependencies
-   npm install
-
-2. Expose local server with ngrok
-   ngrok http 3001
-   Copy the https URL (e.g. https://abc123.ngrok.io)
-
-3. Create Shopify App in Partner Dashboard
-   - Go to partners.shopify.com
-   - Create app → Custom app
-   - App URL: https://abc123.ngrok.io
-   - Redirect URL: https://abc123.ngrok.io/auth/callback
-   - Scopes: read_products, write_script_tags
-   - Copy API Key and API Secret
-
-4. Configure environment
-   cp .env.example .env
-   Fill in SHOPIFY_API_KEY, SHOPIFY_API_SECRET, HOST_NAME
-
-5. Start the app
-   npm start
-
-6. Install on development store
-   Go to your Shopify development store
-   Visit: https://abc123.ngrok.io/auth?shop=your-dev-store.myshopify.com
-```
-
-**package.json scripts**
-```json
-{
-  "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "tunnel": "ngrok http 3001"
-  }
+**ScrapeJob entity** (com.fitvision.domain.scraping)
+```java
+@Entity @Table(name = "scrape_jobs")
+public class ScrapeJob {
+    @Id UUID id;
+    @ManyToOne Brand brand;
+    @Enumerated(EnumType.STRING) ScrapeStatus status; // PENDING, RUNNING, COMPLETED, FAILED
+    Instant startedAt;
+    Instant completedAt;
+    int pagesScraped;
+    int entriesFound;
+    String errorMessage;
+    Instant createdAt;
 }
 ```
 
-### PHASE 8 COMPLETION CHECKLIST
-Before moving to Phase 9, verify:
-- [ ] npm start launches the Shopify App server on port 3001
-- [ ] GET /auth?shop=dev-store.myshopify.com redirects to Shopify consent
-- [ ] After consent, /auth/callback creates FitVision account and redirects to /app
-- [ ] /app shows connected store name and apiKeyPublic
-- [ ] "Sync products now" creates products in FitVision with correct externalProductId
-- [ ] Products appear in FitVision dashboard with hasSizeChart=false
-- [ ] Widget ScriptTag created in Shopify store
-- [ ] products/create webhook creates product in FitVision
-- [ ] products/delete webhook soft-deletes product in FitVision
-- [ ] app/uninstalled webhook deactivates store in FitVision
-- [ ] Widget recommendation works end-to-end for a synced product after size chart upload
+**ScrapeJobRepository** (@Repository)
+- findByBrandIdOrderByCreatedAtDesc(UUID brandId, Pageable pageable)
+- findByStatus(ScrapeStatus status)
+- countByBrandIdAndStatus(UUID brandId, ScrapeStatus status)
 
-FitVision — Phase 9 Prompts: Scraping Pipeline
+**BrandScraper interface**
+```java
+public interface BrandScraper {
+    String getBrandSlug();           // e.g. "zara"
+    boolean supportsCategory(String category); // "tops", "bottoms", "dresses"
+    List<ScrapeResult> scrape(String category) throws ScraperException;
+}
+```
 
-Pre-condition: Phase 8 complete or running in parallel. Admin area operational (admin can trigger scrapes and view results).
+**ScrapeResult** (value object)
+```java
+public record ScrapeResult(
+    String sizeLabel,       // "S", "M", "L", "XL", "XXL"
+    BigDecimal chestMin, BigDecimal chestMax,
+    BigDecimal waistMin, BigDecimal waistMax,
+    BigDecimal hipMin, BigDecimal hipMax,
+    BigDecimal heightMin, BigDecimal heightMax,
+    String sourceUrl        // page URL where data was scraped from
+) {}
+```
 
+**ScraperException** (RuntimeException)
+- message, cause, String sourceUrl (page where it failed)
 
-Prompt 9.1 — Scraper Infrastructure + Zara
-CONTEXT
-FitVision backend. Global brands exist (created by admin). The scraping pipeline fetches size charts from brand websites and stores them as global size charts.
-Stack: Spring Scheduler + Playwright Java (already in approved libraries list).
-New entities needed:
+**ZaraScraper** (@Component, implements BrandScraper)
 
-ScrapeJob: id, brandId, status (PENDING/RUNNING/COMPLETED/FAILED), startedAt, completedAt, pagesScraped, entriesFound, errorMessage
-Add last_scraped_at and scrape_source_url to size_charts table
+getBrandSlug(): "zara"
+supportsCategory: "tops" only (Phase 9.1 scope)
 
-OBJECTIVE
-Build the scraping infrastructure and first scraper (Zara).
-ScraperService (@Service)
+scrape("tops") method:
+1. Check robots.txt at https://www.zara.com/robots.txt — if /pt/ disallowed, log warning and throw ScraperException
+2. Navigate to Zara men's size guide page: https://www.zara.com/pt/pt/guia-de-tamanhos.html
+3. Use Playwright to:
+   - Wait for size table to be visible (timeout 10s)
+   - Find the men's tops/t-shirts section
+   - Extract rows: size label + chest measurement in cm
+   - Handle both CM and inches modes — always read CM values
+4. Convert garment measurements to body measurements:
+   - chestMin = garmentChest - 4
+   - chestMax = garmentChest + 2
+5. Rate limit: Thread.sleep(3000) between page navigations
+6. Return List<ScrapeResult> with sourceUrl set to the page URL
+7. On any error: throw ScraperException with the page URL where it failed
 
-Method: ScrapeResult scrape(Brand brand)
-Uses Playwright to navigate to brand size chart page
-Extracts size data by category (tops, bottoms, dresses)
-Returns structured SizeEntryData list per category
+Playwright setup:
+- Use Playwright.create() with headless=true, no-sandbox args
+- Always close browser in finally block
+- User-agent: "Mozilla/5.0 (compatible; FitVision-Scraper/1.0; +https://fitvision.io/bot)"
 
-ZaraScraper (@Component, implements BrandScraper)
+**BrandScraperRegistry** (@Component)
+```java
+@Component
+public class BrandScraperRegistry {
+    private final Map<String, BrandScraper> scrapers;
 
-Navigates to zara.com product size guide pages
-Extracts size tables for men's tops (starting point)
-Handles pagination and dynamic content (Playwright waits for element)
-Respects robots.txt — checks before scraping
-Rate limit: max 1 request per 3 seconds
+    public BrandScraperRegistry(List<BrandScraper> scraperList) {
+        this.scrapers = scraperList.stream()
+            .collect(Collectors.toMap(BrandScraper::getBrandSlug, Function.identity()));
+    }
 
-ScrapeScheduler (@Component)
+    public Optional<BrandScraper> findBySlug(String slug) {
+        return Optional.ofNullable(scrapers.get(slug));
+    }
+}
+```
 
-@Scheduled(cron = "0 0 2 * * MON") — runs every Monday at 2am
-Finds all global brands with last_scraped_at older than 30 days
-Queues scrape jobs
-Runs jobs sequentially (no parallel scraping)
+**ScraperService** (@Service, @Transactional)
 
-Admin trigger
+Method: ScrapeJob executeScrape(UUID brandId, String category)
+1. Load brand — throw if not found or not global (tenant_id must be null)
+2. Check if a RUNNING job exists for this brand — throw if yes (no concurrent scrapes)
+3. Create ScrapeJob with status=PENDING, save
+4. Find scraper via BrandScraperRegistry — if none, mark job FAILED with "No scraper available for brand slug: {slug}"
+5. Mark job RUNNING, set startedAt
+6. Call scraper.scrape(category)
+7. On success:
+   - Create new SizeChart for brand (globalBrand=true, source=FITVISION_MANAGED)
+   - Deactivate previous active size chart for this brand+category
+   - Create SizeEntry records from ScrapeResult list
+   - Set scrape_source_url and last_scraped_at on new SizeChart
+   - Mark job COMPLETED, set entriesFound, completedAt
+8. On ScraperException:
+   - Mark job FAILED, set errorMessage
+   - Do NOT modify existing active size chart
+   - Log at ERROR level with brandId, category, sourceUrl
+9. Always save job at the end
 
-POST /api/admin/v1/brands/{brandId}/scrape → triggers immediate scrape job
-GET /api/admin/v1/brands/{brandId}/scrape-jobs → list scrape history
+**ScrapeScheduler** (@Component)
+```java
+@Scheduled(cron = "0 0 2 * * MON") // Every Monday at 2am
+public void scheduledScrape() {
+    // Find all global brands with last_scraped_at older than 30 days OR never scraped
+    // For each: call scraperService.executeScrape(brand.getId(), "tops")
+    // Run sequentially, never parallel
+    // Log start/end with count
+}
+```
 
-V6 migration
-sqlALTER TABLE size_charts ADD COLUMN scrape_source_url VARCHAR(500);
-CREATE TABLE scrape_jobs (
-    id UUID PRIMARY KEY,
-    brand_id UUID REFERENCES brands(id),
-    status VARCHAR(20) NOT NULL,
-    started_at TIMESTAMP,
-    completed_at TIMESTAMP,
-    pages_scraped INTEGER DEFAULT 0,
-    entries_found INTEGER DEFAULT 0,
-    error_message TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-CONSTRAINTS
+Add to application.yml:
+```yaml
+spring:
+  task:
+    scheduling:
+      enabled: true
+```
 
-Never scrape faster than 1 request per 3 seconds per domain
-Always check robots.txt before scraping a new domain
-Store scrape_source_url for every scraped size chart
-Failed scrape does not overwrite existing active size chart
-All scraper code must handle site layout changes gracefully (try-catch per step)
+**pom.xml additions**
+```xml
+<dependency>
+    <groupId>com.microsoft.playwright</groupId>
+    <artifactId>playwright</artifactId>
+    <version>1.42.0</version>
+</dependency>
+```
 
-EXPECTED OUTPUT
+Add Playwright browser install to Dockerfile:
+```dockerfile
+RUN mvn dependency:resolve
+RUN java -cp target/dependency/* com.microsoft.playwright.CLI install chromium
+```
 
-BrandScraper.java (interface)
-ZaraScraper.java
-ScraperService.java
-ScrapeScheduler.java
-ScrapeJob.java (entity)
-ScrapeJobRepository.java
-Updated AdminController.java (scrape trigger + history endpoints)
-V6__add_scrape_jobs.sql
-Updated pom.xml (Playwright dependency if not already present)
+### CONSTRAINTS
+- robots.txt check is mandatory — ScraperException if disallowed
+- Rate limit: Thread.sleep(3000) between page requests — no exceptions
+- Failed scrape never touches existing size chart data
+- No concurrent scrapes for the same brand — check before starting
+- Playwright browser always closed in finally block — no resource leaks
+- User-agent must identify the bot
+- All scraping code in com.fitvision.infrastructure.scraping package
 
+### EXPECTED OUTPUT
+- V8__add_scrape_jobs.sql
+- ScrapeJob.java (entity)
+- ScrapeJobRepository.java
+- ScrapeStatus.java (enum: PENDING, RUNNING, COMPLETED, FAILED)
+- BrandScraper.java (interface)
+- ScrapeResult.java (record)
+- ScraperException.java
+- ZaraScraper.java
+- BrandScraperRegistry.java
+- ScraperService.java
+- ScrapeScheduler.java
+- Updated pom.xml (Playwright dependency)
+- Updated Dockerfile (Playwright browser install)
+- Updated application.yml (scheduling enabled)
 
-Prompt 9.2 — Additional Brand Scrapers + Admin Scrape UI
-CONTEXT
-FitVision. Zara scraper working. Infrastructure established. Now adding more brands and admin UI to manage scraping.
-OBJECTIVE
-Add scrapers for H&M, Pull&Bear, Mango. Build admin scrape management UI.
-Additional scrapers
+After implementing: docker compose down → mvn clean package -DskipTests → docker compose up --build -d. Confirm Flyway V8 runs on startup.
 
-HMScraper.java — hm.com size guide pages
-PullAndBearScraper.java — pullandbear.com
-MangoScraper.java — mango.com
+### NEXT STEP
+Prompt 9.2 adds admin trigger endpoints and admin UI for scrape management.
 
-BrandScraperRegistry (@Component)
+---
 
-Map<String, BrandScraper> keyed by brand slug
-ScraperService resolves correct scraper by brand slug
-Unknown brands: log warning, skip scrape
+## Prompt 9.2 — Admin Scrape Endpoints + Admin UI
 
-Admin Scrape UI (admin/brands/page.tsx additions)
-For each global brand:
+### CONTEXT
+FitVision. Scraper infrastructure complete (Prompt 9.1). ZaraScraper implemented. ScraperService.executeScrape() available. Admin backend at /api/admin/v1/**. Admin frontend at /admin/brands.
 
-Last scraped date (or "Never")
-"Scrape now" button → calls POST /api/admin/v1/brands/{id}/scrape
-Scrape status badge: idle / running / completed / failed
-Link to scrape history
-Manual override button: "Edit size chart" (opens same upload drawer as Phase A3)
+### OBJECTIVE
+Expose scrape trigger and history via admin API. Add scrape management UI to admin brands page.
 
-Scrape history drawer
+**AdminController additions** (new endpoints under /api/admin/v1)
 
-List of past scrape jobs with status, timestamp, entries found, error if any
+POST /brands/{brandId}/scrape
+- Body: { "category": "tops" } (optional, defaults to "tops")
+- Calls scraperService.executeScrape(brandId, category) in a new thread (async)
+- Returns immediately: { "jobId": UUID, "status": "RUNNING", "message": "Scrape started" }
+- If scraper already running for this brand: returns 409 CONFLICT
 
-CONSTRAINTS
+GET /brands/{brandId}/scrape-jobs?page=0&size=10
+- Returns paginated ScrapeJob history for brand
+- ScrapeJobResponse: id, brandId, brandName, status, startedAt, completedAt, pagesScraped, entriesFound, errorMessage, createdAt
 
-Each scraper must be independently testable with a mock Playwright browser
-Scrapers should not fail silently — always update ScrapeJob status
-Manual override (admin upload) always takes priority over scraped data
+GET /brands/{brandId}/scrape-jobs/{jobId}
+- Returns single ScrapeJob detail
 
-EXPECTED OUTPUT
+GET /scrape-jobs?status=&page=0&size=20
+- Platform-wide scrape job list with optional status filter
+- Used by admin overview
 
-HMScraper.java, PullAndBearScraper.java, MangoScraper.java
-BrandScraperRegistry.java
-Updated AdminController.java
-Updated admin/brands/page.tsx (scrape management UI)
+**ScrapeJobResponse** (DTO)
+- All ScrapeJob fields
+- durationSeconds: long (completedAt - startedAt, null if not completed)
+- isStale: boolean (last_scraped_at older than 30 days or null)
+
+**AdminService additions**
+- triggerScrapeAsync(UUID brandId, String category): CompletableFuture<ScrapeJob>
+- getScrapeJobs(UUID brandId, Pageable): Page<ScrapeJobResponse>
+- getAllScrapeJobs(ScrapeStatus filter, Pageable): Page<ScrapeJobResponse>
+
+**Frontend — admin/brands/page.tsx updates**
+
+For each global brand in the table, add a scraping section:
+
+Status column additions:
+- Last scraped: formatted date or "Never"
+- isStale badge: yellow "Stale" badge if older than 30 days
+- Size chart status: "Active" (green) or "None" (grey)
+
+Actions column additions:
+- "Scrape now" button:
+  - POST /api/admin/v1/brands/{id}/scrape
+  - Shows loading spinner while running
+  - On success: shows toast "Scrape started"
+  - On 409: shows toast "Scrape already running"
+  - Polling: every 5 seconds check scrape job status, update badge when COMPLETED or FAILED
+
+Scrape history drawer (new component: ScrapeHistoryDrawer.tsx):
+- Opens on "View history" link next to each brand
+- Lists last 10 scrape jobs in a table:
+  - Date, Status badge (colour-coded), Duration, Entries found, Error (if failed)
+- "Scrape now" button also available inside drawer
+
+ScrapeStatusBadge component:
+- PENDING → grey
+- RUNNING → blue + spinner
+- COMPLETED → green
+- FAILED → red
+
+**lib/api.ts additions**
+```typescript
+adminTriggerScrape(brandId: string, category?: string): Promise<{ jobId: string, status: string }>
+adminGetScrapeJobs(brandId: string, page?: number): Promise<PagedResponse<ScrapeJobResponse>>
+adminGetScrapeJob(brandId: string, jobId: string): Promise<ScrapeJobResponse>
+```
+
+**types.ts additions**
+```typescript
+interface ScrapeJobResponse {
+  id: string
+  brandId: string
+  brandName: string
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  startedAt: string | null
+  completedAt: string | null
+  pagesScraped: number
+  entriesFound: number
+  errorMessage: string | null
+  durationSeconds: number | null
+  isStale: boolean
+  createdAt: string
+}
+```
+
+### CONSTRAINTS
+- Scrape trigger is async — admin does not wait for completion
+- Polling interval 5s — stop polling when status is COMPLETED or FAILED
+- 409 response when scrape already running must show clear message in UI
+- ScrapeHistoryDrawer must handle empty state: "No scrape history yet"
+- Admin can trigger scrape even if brand has no scraper — backend returns FAILED job gracefully
+
+### EXPECTED OUTPUT
+Backend:
+- Updated AdminController.java (3 new endpoints)
+- Updated AdminService.java (3 new methods)
+- ScrapeJobResponse.java (DTO)
+
+Frontend:
+- Updated app/(admin)/admin/brands/page.tsx
+- components/admin/ScrapeHistoryDrawer.tsx
+- components/admin/ScrapeStatusBadge.tsx
+- Updated lib/api.ts
+- Updated types.ts
+
+### NEXT STEP
+Prompt 9.3 adds scrapers for H&M, Pull&Bear, and Mango.
+
+---
+
+## Prompt 9.3 — Additional Brand Scrapers (H&M, Pull&Bear, Mango)
+
+### CONTEXT
+FitVision. Scraper infrastructure complete. ZaraScraper implemented and working. BrandScraperRegistry auto-discovers scrapers via Spring DI. Admin can trigger scrapes and view history.
+
+### OBJECTIVE
+Add scrapers for H&M, Pull&Bear, and Mango. All follow the same BrandScraper interface.
+
+**HMScraper** (@Component, implements BrandScraper)
+- getBrandSlug(): "hm"
+- supportsCategory: "tops", "bottoms"
+- Target: https://www2.hm.com/pt_pt/customerservice/sizeguide/ladies.html (women) and /mens.html (men)
+- Extract size table rows: size label + chest/waist/hip in cm
+- Convert garment → body: chestMin = garment - 4, chestMax = garment + 2, waistMin = garment - 3, waistMax = garment + 2
+
+**PullAndBearScraper** (@Component, implements BrandScraper)
+- getBrandSlug(): "pull-and-bear"
+- supportsCategory: "tops", "bottoms"
+- Target: https://www.pullandbear.com/pt/guia-de-tamanhos.html
+- Same extraction pattern as Zara (Inditex group — similar HTML structure)
+
+**MangoScraper** (@Component, implements BrandScraper)
+- getBrandSlug(): "mango"
+- supportsCategory: "tops", "bottoms", "dresses"
+- Target: https://shop.mango.com/pt/pt/guia-de-tamanhos
+- Extract multi-category tables
+
+**Common scraping rules for all scrapers:**
+- robots.txt check before first request — ScraperException if disallowed
+- Thread.sleep(3000) between page requests
+- Playwright headless browser, always closed in finally
+- Same user-agent as ZaraScraper
+- chestMin = garmentChest - 4, chestMax = garmentChest + 2 (standard conversion)
+- waistMin = garmentWaist - 3, waistMax = garmentWaist + 2 (standard conversion)
+- hipMin = garmentHip - 4, hipMax = garmentHip + 2 (standard conversion)
+- If a measurement column is absent for a category, leave it null (not zero)
+
+**AbstractBrandScraper** (abstract class, optional but recommended)
+- Shared logic: robots.txt check, rate limiting, Playwright setup/teardown, measurement conversion
+- Subclasses implement: getBaseUrl(), getSizeTableSelector(), parseRow(row) → ScrapeResult
+
+**ScrapeScheduler update**
+- scheduledScrape() now triggers scrapes for ALL global brands with registered scrapers
+- Brands without a registered scraper are skipped with a log warning (not an error)
+- Order: Zara → H&M → Pull&Bear → Mango (sequential, never parallel)
+
+### CONSTRAINTS
+- Each scraper must handle layout changes gracefully — wrap each Playwright step in try-catch
+- Null measurement fields are valid — do not default to 0
+- AbstractBrandScraper is optional — use it only if it reduces duplication meaningfully
+- All scrapers in com.fitvision.infrastructure.scraping package
+- BrandScraperRegistry auto-discovers all scrapers via Spring DI — no manual registration needed
+
+### EXPECTED OUTPUT
+- HMScraper.java
+- PullAndBearScraper.java
+- MangoScraper.java
+- AbstractBrandScraper.java (if used)
+- Updated ScrapeScheduler.java (all brands)
+
+### PHASE 9 COMPLETION CHECKLIST
+Before moving to Phase 10, verify:
+- [ ] V8 migration runs on Docker startup without errors
+- [ ] ScrapeJob entity persists to database
+- [ ] POST /api/admin/v1/brands/{id}/scrape returns jobId immediately
+- [ ] ScrapeJob status transitions: PENDING → RUNNING → COMPLETED or FAILED
+- [ ] ZaraScraper creates global size chart entries in database
+- [ ] Failed scrape does not overwrite existing active size chart
+- [ ] Admin brands page shows "Last scraped" date and stale badge
+- [ ] Scrape history drawer lists past jobs with status and duration
+- [ ] ScrapeScheduler runs on Monday at 2am (verify via log on startup)
+- [ ] BrandScraperRegistry auto-discovers all 4 scrapers (log on startup)
+- [ ] H&M, Pull&Bear, Mango scrapers registered and triggerable via admin
+- [ ] robots.txt check prevents scraping if disallowed (unit test)
+- [ ] Rate limit enforced: 3s between requests (verify in scraper logs)
