@@ -4,13 +4,14 @@ import com.fitvision.api.admin.AdminMetricsResponse;
 import com.fitvision.api.admin.AdminRecommendationView;
 import com.fitvision.api.admin.BrandRecommendationStat;
 import com.fitvision.api.admin.GlobalBrandSizeChartVersionResponse;
+import com.fitvision.api.admin.ScrapeJobResponse;
 import com.fitvision.api.admin.StoreAdminView;
 import com.fitvision.api.dashboard.brand.BrandResponse;
 import com.fitvision.domain.brand.Brand;
 import com.fitvision.domain.product.Product;
 import com.fitvision.domain.recommendation.RecommendationRequest;
+import com.fitvision.domain.scraping.ScrapeJob;
 import com.fitvision.domain.sizechart.ParseResult;
-import com.fitvision.domain.sizechart.SizeChart;
 import com.fitvision.domain.sizechart.SizeChartService;
 import com.fitvision.domain.sizechart.SizeChartUploadResult;
 import com.fitvision.domain.store.Store;
@@ -19,6 +20,7 @@ import com.fitvision.infrastructure.persistence.ProductRepository;
 import com.fitvision.infrastructure.persistence.RecommendationRequestRepository;
 import com.fitvision.infrastructure.persistence.SizeChartRepository;
 import com.fitvision.infrastructure.persistence.StoreRepository;
+import com.fitvision.integration.scraper.ScraperService;
 import com.fitvision.shared.exception.ErrorCode;
 import com.fitvision.shared.exception.FitVisionException;
 import org.slf4j.Logger;
@@ -52,19 +54,22 @@ public class AdminService {
     private final RecommendationRequestRepository recommendationRequestRepository;
     private final SizeChartRepository sizeChartRepository;
     private final SizeChartService sizeChartService;
+    private final ScraperService scraperService;
 
     public AdminService(StoreRepository storeRepository,
                         ProductRepository productRepository,
                         BrandRepository brandRepository,
                         RecommendationRequestRepository recommendationRequestRepository,
                         SizeChartRepository sizeChartRepository,
-                        SizeChartService sizeChartService) {
+                        SizeChartService sizeChartService,
+                        ScraperService scraperService) {
         this.storeRepository = storeRepository;
         this.productRepository = productRepository;
         this.brandRepository = brandRepository;
         this.recommendationRequestRepository = recommendationRequestRepository;
         this.sizeChartRepository = sizeChartRepository;
         this.sizeChartService = sizeChartService;
+        this.scraperService = scraperService;
     }
 
     public AdminMetricsResponse getMetrics() {
@@ -252,6 +257,28 @@ public class AdminService {
         }
 
         log.info("Admin action: deactivate-global-brand-size-chart adminStoreId={} brandId={}", adminStoreId, brandId);
+    }
+
+    @Transactional
+    public ScrapeJobResponse triggerBrandScrape(UUID brandId, UUID adminStoreId) {
+        ScrapeJob job = scraperService.triggerNow(brandId, adminStoreId);
+        log.info("Admin action: trigger-brand-scrape adminStoreId={} brandId={} jobId={} status={}",
+                adminStoreId, brandId, job.getId(), job.getStatus());
+        return ScrapeJobResponse.from(job);
+    }
+
+    public List<ScrapeJobResponse> getBrandScrapeJobs(UUID brandId, UUID adminStoreId) {
+        brandRepository.findGlobalById(brandId)
+                .orElseThrow(() -> new FitVisionException(ErrorCode.BRAND_NOT_FOUND, "Global brand not found"));
+
+        List<ScrapeJobResponse> jobs = scraperService.listJobs(brandId).stream()
+                .map(ScrapeJobResponse::from)
+                .toList();
+
+        log.info("Admin action: list-brand-scrape-jobs adminStoreId={} brandId={} count={}",
+                adminStoreId, brandId, jobs.size());
+
+        return jobs;
     }
 
     public Page<AdminRecommendationView> getRecommendations(UUID tenantId,

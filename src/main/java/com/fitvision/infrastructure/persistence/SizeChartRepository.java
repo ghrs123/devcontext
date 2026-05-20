@@ -35,6 +35,11 @@ public interface SizeChartRepository extends JpaRepository<SizeChart, UUID> {
     @Query("UPDATE SizeChart sc SET sc.active = false WHERE sc.productId = :productId")
     void deactivateAllByProductId(@Param("productId") UUID productId);
 
+        @Modifying
+        @Query("UPDATE SizeChart sc SET sc.scrapeSourceUrl = :scrapeSourceUrl WHERE sc.id = :sizeChartId")
+        void updateScrapeSourceUrl(@Param("sizeChartId") UUID sizeChartId,
+                                                           @Param("scrapeSourceUrl") String scrapeSourceUrl);
+
     /**
      * Returns all size chart versions for a product, ordered from newest to oldest.
      * Used to determine the next version number.

@@ -397,7 +397,7 @@ sizeChartRepository.findById(id);
 # FitVision — Build Progress
 
 ## Current Status
-Phase A — Complete. All fixes and admin area fully implemented. Next: smoke test admin flow, then advance to Phase 8 (Shopify App).
+Phase 8 — Shopify App. Prompts 8.1, 8.2 and 8.3 generated and ready to execute. Phase A fully complete. All fixes applied, admin area operational.
 
 ## What Has Been Built
 
@@ -492,8 +492,8 @@ Phase A — Complete. All fixes and admin area fully implemented. Next: smoke te
 ### Phase A — Critical Fixes + Admin Area ✅
 
 **A1a — SecretKeyAuthFilter scope**
-- shouldNotFilter() added: scoped to /api/dashboard/v1/size-charts/ only
-- Dashboard routes no longer blocked by wrong filter
+- shouldNotFilter() scoped to /api/dashboard/v1/size-charts/ only
+- Dashboard routes no longer blocked
 
 **A1b — brandId optional in ProductService**
 - Products can be created without brand association
@@ -501,64 +501,77 @@ Phase A — Complete. All fixes and admin area fully implemented. Next: smoke te
 
 **A2 — Brand management UI**
 - BrandController: GET /brands, POST /brands (tenant-scoped, slug auto-generated)
-- Brand selector in ProductForm: dropdown with all brands + "Create new brand" inline option
-- Brands management section in Products page: list, create, delete
-- Global brands (tenant_id = null) shown as read-only with "Global" badge
+- Brand selector in ProductForm with inline create option
+- Brands management section in Products page
+- Global brands shown as read-only with "Global" badge
 
 **A3 — Admin area backend**
 - V4__add_admin_role.sql: role column on stores (STORE | ADMIN)
 - AdminAuthFilter: validates JWT + role=ADMIN for /api/admin/**
 - JwtService updated: role claim included in token
-- AdminController: GET /metrics, GET/PATCH /stores, GET/POST /brands, POST /brands/{id}/size-charts, GET /recommendations
+- AdminController: /metrics, /stores, /brands, /recommendations endpoints
 - AdminService: platform-wide aggregations (no tenant_id filter)
 - ApiKeyAuthFilter updated: checks store status=ACTIVE
-- POST /api/admin/seed: creates first admin, returns 409 if already exists
+- POST /api/admin/seed: creates first admin, returns 409 if exists
 - scripts/create-admin.sh
 
 **A4 — Admin area frontend**
 - /admin route group with dark sidebar
 - Platform Overview, Stores, Global Brands, Recommendations pages
 - useAdminGuard hook on every admin page
-- Role-based redirect in middleware and login/register pages
+- Role-based redirect in middleware and login/register
 - Admin API methods in lib/api.ts, types in types.ts
-- Known limitation: store detail drawer shows recommendation history only — full product list endpoint pending (add in Phase 8 backend work)
+- Known limitation: store detail drawer shows recommendation history only — full product list endpoint deferred
 
 **A5 — Swagger/OpenAPI**
-- springdoc-openapi-starter-webmvc-ui added to pom.xml
-- /swagger-ui/**, /v3/api-docs/** permitted in SecurityConfig
+- springdoc-openapi-starter-webmvc-ui added
 - Accessible at http://localhost:8080/swagger-ui.html
 
 ## Current Phase
-Phase 8 — Shopify App
+Phase 8 — Shopify App (prompts generated, ready to execute)
+
+## Phase 8 Status
+
+### 8.1 — Setup + OAuth 🔲 PENDING
+- /shopify-app directory, Node.js/Express, @shopify/shopify-api
+- OAuth flow: install → consent → callback → FitVision account linked
+- Backend: V5 migration, ShopifyController, ShopifyService (AES-256)
+- Shared secret validation between Shopify App and FitVision backend
+
+### 8.2 — Product Sync + Widget Injection 🔲 PENDING
+- fitvision.js: API client for backend calls
+- sync.js: fetch all Shopify products → create in FitVision (idempotent)
+- webhooks.js: products/create, update, delete (HMAC validated)
+- inject.js: ScriptTag API injection (idempotent)
+- app.html: embedded UI (status, sync button, integration guide)
+- Admin JWT cached in memory, refreshed every 20h
+
+### 8.3 — Uninstall + Local Dev 🔲 PENDING
+- app/uninstalled webhook → deactivate store (data preserved)
+- Reinstall reactivates store in ShopifyController
+- /shopify-app/README.md with ngrok setup instructions
+- Phase 8 completion checklist
 
 ## Remaining Phases
 
-### Phase 8 — Shopify App (next to execute)
-- Shopify CLI + @shopify/shopify-api (Node.js/Express, /shopify-app directory)
-- OAuth flow: install → consent → callback → FitVision account link
-- Automatic product sync on install
-- Webhook handlers: products/create, products/update, products/delete
-- Widget injection via ScriptTag API or Theme App Extension
-- Embedded App UI in Shopify Admin
-- V5 migration: stores.shopify_shop, stores.shopify_access_token_encrypted
-- New backend: ShopifyController (/api/shopify/**)
-
 ### Phase 9 — Scraping Pipeline
 - Playwright Java scraper for Zara, H&M, Pull&Bear, Mango
-- Spring Scheduler: every Monday at 2am
-- ScrapeJob entity: status, pages scraped, entries found, errors
+- Spring Scheduler: every Monday at 2am, skips brands scraped < 30 days ago
+- ScrapeJob entity: status (PENDING/RUNNING/COMPLETED/FAILED), pages scraped, entries found, error
 - Admin trigger: POST /api/admin/v1/brands/{id}/scrape
+- Admin UI: last scraped date, trigger button, history drawer per brand
 - V6 migration: scrape_jobs table, scrape_source_url on size_charts
-- Robots.txt compliance, max 1 request per 3 seconds
 - BrandScraperRegistry: resolves scraper by brand slug
-- Admin scrape UI: last scraped, trigger button, history drawer
+- Robots.txt compliance, max 1 request per 3 seconds per domain
+- Failed scrape does not overwrite existing active size chart
 
 ### Phase 10 — Billing & Subscriptions
-- Stripe: Free, Starter €29/mo, Pro €79/mo, Team €149/mo
+- Stripe: Free (2 products), Starter €29/mo, Pro €79/mo, Team €149/mo
 - Stripe webhook handlers: subscription created/updated/cancelled
 - Plan enforcement: check limits before product creation and recommendations
 - Billing UI in store settings
 - Admin subscription view per store
+- Level 2 admin: plan override, revenue metrics, store impersonation
 
 ### Phase 11 — Production Deployment
 - Railway (backend) + Vercel (dashboard) + Cloudflare CDN (widget)
@@ -567,23 +580,24 @@ Phase 8 — Shopify App
 - Resend (transactional email: welcome, API key regenerated, plan upgraded)
 - SSL + custom domains: fitvision.io, app.fitvision.io, api.fitvision.io
 - CI/CD: GitHub Actions → build → test → deploy
-- Environment variables audit
+- Environment variables audit (JWT secret, DB URL, Stripe keys, Shopify keys)
 
 ### Phase 12 — Observability & Operations
 - Structured logging with correlation IDs
 - Sentry for error alerting
 - Performance monitoring: p95 recommendation latency
-- Admin health panel
+- Admin health panel (Level 3 admin)
 - PostgreSQL backup strategy
+- Error log viewer per tenant
+- Force re-scrape per brand from admin
 
 ## Admin Area — Full Specification
 
-### Level 1 — Operational ✅ DONE (Phase A3/A4)
+### Level 1 — Operational ✅ DONE (Phase A)
 - View all registered stores with metrics
 - Activate / deactivate any store
-- Platform-wide metrics (total stores, recommendations, avg confidence)
+- Platform-wide metrics
 - Manage global brands and size charts
-- Global size charts available to all stores automatically
 
 ### Level 2 — Business (Phase 10)
 - Subscription status per store
@@ -601,7 +615,7 @@ Phase 8 — Shopify App
 ### Admin Security Rules
 - Admin JWT contains role=ADMIN claim
 - AdminAuthFilter validates JWT + role before /api/admin/**
-- Admin account created ONLY via seed script — never via /auth/register
+- Admin account created ONLY via seed script
 - Seed endpoint returns 409 if any admin already exists
 - All admin actions logged with adminStoreId and timestamp
 
@@ -615,10 +629,10 @@ docker logs devcontext-fitvision-backend-1 --tail 30
 ```
 
 ## Real-World Testing Notes
-- Zara T-Shirt Slim Fit Básica /01 size chart tested
+- Zara T-Shirt Slim Fit Básica /01 size chart tested end-to-end
 - CSV format: size_label, chest_min/max (waist/hip/height empty for tops)
 - Peça → body measurements: subtract 4cm min, add 2cm max
-- Brand creation now available in dashboard (A2 complete)
+- Brand creation available in dashboard (A2 complete)
 
 ## Decisions Made
 - JWT chosen over Keycloak
@@ -630,9 +644,17 @@ docker logs devcontext-fitvision-backend-1 --tail 30
 - Docker Compose for local dev; Railway for production
 - brandId optional — product can exist without brand
 - Admin account only via seed script, never via public register
+- Shopify access tokens encrypted AES-256 in database
+- Shared secret (X-FitVision-Shopify-Secret) validates Shopify App → Backend calls
+- Uninstall deactivates store, never deletes — data always preserved
+- Reinstall reactivates existing store in ShopifyController
 
 ## Decisions Pending
 - Pricing tiers finalisation
+- Initial brand database (Zara confirmed; H&M, Pull&Bear, Mango planned)
+- Stripe integration timing (Phase 10)
+- Production database: Neon vs Railway PostgreSQL
+- Store detail endpoint for admin drawer (add during Phase 9 or standalone)
 - Initial brand database (Zara confirmed; H&M, Pull&Bear, Mango planned)
 - Stripe integration timing (Phase 10)
 - Production database: Neon vs Railway PostgreSQL
@@ -3305,3 +3327,480 @@ For each global brand:
 - BrandScraperRegistry.java
 - Updated AdminController.java
 - Updated admin/brands/page.tsx (scrape management UI)
+# FitVision — Phase 8 Prompts: Shopify App
+
+> Pre-condition: Phase A complete. Backend running in Docker with all fixes applied. Admin area operational. Brand management working. Swagger available at /swagger-ui.html.
+
+---
+
+## Prompt 8.1 — Shopify App Project Setup + OAuth Flow
+
+### CONTEXT
+FitVision. The Shopify App allows store owners to install FitVision with one click via the Shopify App Store, instead of manually copying a script tag. The app authenticates the store owner via Shopify OAuth and automatically links their Shopify store to a FitVision account.
+
+The Shopify App is a separate Node.js/Express server — NOT part of the Next.js dashboard. It lives in a new /shopify-app directory at the project root.
+
+Architecture:
+- /shopify-app — Node.js/Express app (Shopify App server)
+- Backend receives Shopify events via new /api/shopify/** endpoints (Spring Boot)
+- Dashboard stays at localhost:3000 (unchanged)
+
+Stack for Shopify App:
+- Node.js 20+
+- Express 4
+- @shopify/shopify-api (latest)
+- dotenv
+
+Backend additions (Spring Boot):
+- V5__add_shopify_fields.sql
+- ShopifyController.java (/api/shopify/**)
+
+### OBJECTIVE
+Set up the Shopify App project and implement the OAuth installation flow.
+
+**Project structure**
+```
+/shopify-app
+  ├── src/
+  │   ├── index.js         # Express server entry point
+  │   ├── auth.js          # Shopify OAuth handlers
+  │   ├── fitvision.js     # FitVision API client (calls Spring Boot)
+  │   ├── config.js        # Environment configuration
+  │   └── middleware.js    # HMAC validation, session middleware
+  ├── .env.example
+  ├── .gitignore           # must include .env
+  └── package.json
+```
+
+**config.js**
+```javascript
+export const config = {
+  shopify: {
+    apiKey: process.env.SHOPIFY_API_KEY,
+    apiSecret: process.env.SHOPIFY_API_SECRET,
+    scopes: ['read_products', 'write_script_tags'],
+    hostName: process.env.HOST_NAME, // ngrok or production URL
+    apiVersion: '2024-01',
+  },
+  fitvision: {
+    apiUrl: process.env.FITVISION_API_URL || 'http://localhost:8080',
+    adminEmail: process.env.FITVISION_ADMIN_EMAIL,
+    adminPassword: process.env.FITVISION_ADMIN_PASSWORD,
+  },
+  port: process.env.PORT || 3001,
+};
+```
+
+**.env.example**
+```
+SHOPIFY_API_KEY=your_shopify_api_key
+SHOPIFY_API_SECRET=your_shopify_api_secret
+HOST_NAME=https://your-ngrok-url.ngrok.io
+FITVISION_API_URL=http://localhost:8080
+FITVISION_ADMIN_EMAIL=admin@fitvision.io
+FITVISION_ADMIN_PASSWORD=your_admin_password
+PORT=3001
+```
+
+**OAuth flow (auth.js)**
+
+GET /auth?shop={shop}
+1. Validate shop parameter format (*.myshopify.com)
+2. Generate Shopify OAuth URL with scopes
+3. Redirect store owner to Shopify consent page
+
+GET /auth/callback
+1. Validate HMAC signature from Shopify — reject if invalid
+2. Exchange authorization code for permanent access token via Shopify API
+3. Store access token encrypted in FitVision backend:
+   - Call POST /api/shopify/connect with { shop, accessToken, shopName }
+   - Receive back { jwt, apiKeyPublic } for this store
+4. Store jwt and apiKeyPublic in session
+5. Redirect to embedded app UI at /app
+
+**index.js**
+- Express app with session middleware (express-session, in-memory for dev)
+- Mount routes: /auth, /auth/callback, /app, /webhooks
+- Start server on configured port
+- Log startup info: port, Shopify API key, FitVision URL
+
+**Backend — V5__add_shopify_fields.sql**
+```sql
+ALTER TABLE stores ADD COLUMN shopify_shop VARCHAR(255) UNIQUE;
+ALTER TABLE stores ADD COLUMN shopify_access_token_encrypted TEXT;
+CREATE INDEX idx_stores_shopify_shop ON stores(shopify_shop);
+```
+
+**Backend — ShopifyController.java** (/api/shopify)
+
+POST /api/shopify/connect
+- Request body: { shop (String), accessToken (String), shopName (String) }
+- No auth required (called from Shopify App server, not from browser)
+- Validates request has valid HMAC or shared secret header (X-FitVision-Shopify-Secret)
+- Finds existing store by shopify_shop domain or creates a new one:
+  - New store: generates apiKeyPublic, apiKeySecret, sets name=shopName, platform=shopify
+  - Existing store: updates access token
+- Encrypts accessToken with AES-256 before storing
+- Returns: { jwt, apiKeyPublic, storeId }
+
+GET /api/shopify/status?shop={shop}
+- Returns { connected: boolean, storeId, apiKeyPublic } for a given shop domain
+- Used by the embedded app UI to show connection status
+
+**ShopifyService.java**
+- encryptToken(String token): String — AES-256 encryption
+- decryptToken(String encrypted): String — AES-256 decryption
+- Encryption key loaded from application.yml: fitvision.shopify.encryption-key
+
+### CONSTRAINTS
+- NEVER store Shopify access tokens in plain text — always encrypt
+- HMAC validation is mandatory on /auth/callback — reject any request without valid HMAC
+- X-FitVision-Shopify-Secret header on /api/shopify/connect prevents unauthorized calls
+- .env must never be committed — add to .gitignore
+- session secret in .env for production — never hardcoded
+- shopify_shop column must be unique — one FitVision account per Shopify store
+
+### EXPECTED OUTPUT
+- /shopify-app/package.json
+- /shopify-app/src/index.js
+- /shopify-app/src/auth.js
+- /shopify-app/src/config.js
+- /shopify-app/src/middleware.js
+- /shopify-app/.env.example
+- /shopify-app/.gitignore
+- V5__add_shopify_fields.sql
+- ShopifyController.java
+- ShopifyService.java
+- Updated application.yml (shopify encryption key config)
+
+### NEXT STEP
+Prompt 8.2 will implement product sync and widget injection.
+
+---
+
+## Prompt 8.2 — Product Sync + Widget Injection
+
+### CONTEXT
+FitVision Shopify App. OAuth complete. FitVision account linked to Shopify store. JWT and apiKeyPublic stored in session. Shopify access token encrypted in database.
+
+ShopifyService exists with decrypt method.
+FitVision dashboard API at /api/dashboard/v1/products accepts { externalProductId, name, category, genderTarget }.
+
+### OBJECTIVE
+Implement automatic product sync on install and widget injection into Shopify theme.
+
+**fitvision.js — FitVision API client**
+```javascript
+// Wraps all calls to FitVision Spring Boot backend
+async function createProduct(jwt, { externalProductId, name, category })
+async function deleteProduct(jwt, externalProductId)
+async function getProducts(jwt)
+// All methods add Authorization: Bearer {jwt} header
+// All methods target config.fitvision.apiUrl
+```
+
+**sync.js — Product sync**
+
+async function syncAllProducts(shop, jwt)
+1. Fetch all products from Shopify API using stored access token
+2. For each Shopify product:
+   - Map Shopify product type to FitVision category (tops/bottoms/dresses/other)
+   - Call FitVision POST /api/dashboard/v1/products with:
+     - externalProductId: Shopify product ID (as string)
+     - name: Shopify product title
+     - category: mapped category
+     - genderTarget: UNISEX (default — can be refined later)
+3. Log progress: "Synced X of Y products"
+4. Return { synced, failed, total }
+
+Category mapping:
+```javascript
+const categoryMap = {
+  'T-Shirts': 'tops', 'Shirts': 'tops', 'Blouses': 'tops',
+  'Pants': 'bottoms', 'Jeans': 'bottoms', 'Shorts': 'bottoms', 'Skirts': 'bottoms',
+  'Dresses': 'dresses',
+  'Jackets': 'outerwear', 'Coats': 'outerwear',
+};
+// Default: 'other'
+```
+
+**Webhook registration (webhooks.js)**
+
+On successful OAuth (in auth.js after connect), register webhooks:
+- products/create → /webhooks/products/create
+- products/update → /webhooks/products/update
+- products/delete → /webhooks/products/delete
+
+Webhook handlers:
+- products/create: validate HMAC, call FitVision createProduct
+- products/update: validate HMAC, call FitVision updateProduct (name/category)
+- products/delete: validate HMAC, call FitVision deleteProduct (soft delete)
+
+All webhook handlers:
+- Validate X-Shopify-Hmac-SHA256 header before processing
+- Return 200 immediately (Shopify requires fast response)
+- Process asynchronously after responding
+
+**Widget injection (inject.js)**
+
+Function: injectWidget(shop, accessToken, apiKeyPublic)
+- Uses Shopify ScriptTag API to inject the widget script globally
+- Creates ScriptTag with:
+  - src: https://cdn.fitvision.io/widget/fitvision-widget.min.js
+  - display_scope: online_store
+- Checks if ScriptTag already exists before creating (idempotent)
+- Logs result: "Widget ScriptTag created" or "Widget ScriptTag already exists"
+
+Note: The widget reads the product ID from the page — the store owner still needs to add the container div to their product template. The Integration Guide in FitVision Settings shows how.
+
+**Embedded App UI (src/ui/app.html)**
+Simple HTML page served at GET /app:
+- Shows connection status (connected store name + apiKeyPublic)
+- Shows product sync status (last synced, count)
+- "Sync products now" button → POST /app/sync
+- "Open FitVision Dashboard" link → links to app.fitvision.io
+- "View Widget Integration Guide" link → links to FitVision Settings page
+- Uses Shopify App Bridge for embedded UI chrome
+
+POST /app/sync
+- Triggers syncAllProducts for the current session shop
+- Returns { synced, failed, total }
+
+### CONSTRAINTS
+- All webhook handlers must validate HMAC before processing — reject without 401
+- Widget ScriptTag injection is idempotent — check before creating
+- Product sync runs on install and can be triggered manually — must be safe to run multiple times
+- externalProductId must be stored as string (Shopify IDs are large integers)
+- Product sync failures must not block install — log and continue
+
+### EXPECTED OUTPUT
+- /shopify-app/src/sync.js
+- /shopify-app/src/webhooks.js
+- /shopify-app/src/inject.js
+- /shopify-app/src/fitvision.js
+- /shopify-app/src/ui/app.html
+- Updated /shopify-app/src/index.js (webhook routes + /app routes + /app/sync added)
+- Updated /shopify-app/src/auth.js (webhook registration + widget injection on OAuth complete)
+
+### NEXT STEP
+Prompt 8.3 will add app uninstall handling and local development setup with ngrok.
+
+---
+
+## Prompt 8.3 — Uninstall Handler + Local Dev Setup
+
+### CONTEXT
+FitVision Shopify App. OAuth, product sync, and widget injection complete.
+
+When a store uninstalls the app:
+- Shopify sends app/uninstalled webhook
+- FitVision should deactivate the store (not delete — preserve data)
+- ScriptTag is automatically removed by Shopify on uninstall
+
+### OBJECTIVE
+Handle app uninstall and document local development setup.
+
+**Uninstall webhook handler**
+
+app/uninstalled webhook:
+1. Validate HMAC
+2. Call FitVision PATCH /api/admin/stores/{storeId}/status with { status: "INACTIVE" }
+   - Uses admin JWT (fetched at startup using admin credentials from config)
+   - Store is deactivated — widget calls return 401
+3. Log: "Store {shop} uninstalled — account deactivated"
+
+Note: Data is preserved. If the store reinstalls, OAuth flow reactivates the account.
+
+**Admin JWT management (fitvision.js addition)**
+
+On app startup:
+- Call POST /api/dashboard/v1/auth/login with admin credentials
+- Cache admin JWT in memory
+- Refresh JWT every 20 hours (before 24h expiry)
+
+**Local development setup (README.md)**
+
+Create /shopify-app/README.md with complete local dev instructions:
+
+```markdown
+# FitVision Shopify App — Local Development
+
+## Prerequisites
+- Node.js 20+
+- ngrok account (free tier works)
+- Shopify Partner account
+- FitVision backend running at localhost:8080
+
+## Setup
+
+1. Install dependencies
+   npm install
+
+2. Expose local server with ngrok
+   ngrok http 3001
+   Copy the https URL (e.g. https://abc123.ngrok.io)
+
+3. Create Shopify App in Partner Dashboard
+   - Go to partners.shopify.com
+   - Create app → Custom app
+   - App URL: https://abc123.ngrok.io
+   - Redirect URL: https://abc123.ngrok.io/auth/callback
+   - Scopes: read_products, write_script_tags
+   - Copy API Key and API Secret
+
+4. Configure environment
+   cp .env.example .env
+   Fill in SHOPIFY_API_KEY, SHOPIFY_API_SECRET, HOST_NAME
+
+5. Start the app
+   npm start
+
+6. Install on development store
+   Go to your Shopify development store
+   Visit: https://abc123.ngrok.io/auth?shop=your-dev-store.myshopify.com
+```
+
+**package.json scripts**
+```json
+{
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "tunnel": "ngrok http 3001"
+  }
+}
+```
+
+### PHASE 8 COMPLETION CHECKLIST
+Before moving to Phase 9, verify:
+- [ ] npm start launches the Shopify App server on port 3001
+- [ ] GET /auth?shop=dev-store.myshopify.com redirects to Shopify consent
+- [ ] After consent, /auth/callback creates FitVision account and redirects to /app
+- [ ] /app shows connected store name and apiKeyPublic
+- [ ] "Sync products now" creates products in FitVision with correct externalProductId
+- [ ] Products appear in FitVision dashboard with hasSizeChart=false
+- [ ] Widget ScriptTag created in Shopify store
+- [ ] products/create webhook creates product in FitVision
+- [ ] products/delete webhook soft-deletes product in FitVision
+- [ ] app/uninstalled webhook deactivates store in FitVision
+- [ ] Widget recommendation works end-to-end for a synced product after size chart upload
+
+FitVision — Phase 9 Prompts: Scraping Pipeline
+
+Pre-condition: Phase 8 complete or running in parallel. Admin area operational (admin can trigger scrapes and view results).
+
+
+Prompt 9.1 — Scraper Infrastructure + Zara
+CONTEXT
+FitVision backend. Global brands exist (created by admin). The scraping pipeline fetches size charts from brand websites and stores them as global size charts.
+Stack: Spring Scheduler + Playwright Java (already in approved libraries list).
+New entities needed:
+
+ScrapeJob: id, brandId, status (PENDING/RUNNING/COMPLETED/FAILED), startedAt, completedAt, pagesScraped, entriesFound, errorMessage
+Add last_scraped_at and scrape_source_url to size_charts table
+
+OBJECTIVE
+Build the scraping infrastructure and first scraper (Zara).
+ScraperService (@Service)
+
+Method: ScrapeResult scrape(Brand brand)
+Uses Playwright to navigate to brand size chart page
+Extracts size data by category (tops, bottoms, dresses)
+Returns structured SizeEntryData list per category
+
+ZaraScraper (@Component, implements BrandScraper)
+
+Navigates to zara.com product size guide pages
+Extracts size tables for men's tops (starting point)
+Handles pagination and dynamic content (Playwright waits for element)
+Respects robots.txt — checks before scraping
+Rate limit: max 1 request per 3 seconds
+
+ScrapeScheduler (@Component)
+
+@Scheduled(cron = "0 0 2 * * MON") — runs every Monday at 2am
+Finds all global brands with last_scraped_at older than 30 days
+Queues scrape jobs
+Runs jobs sequentially (no parallel scraping)
+
+Admin trigger
+
+POST /api/admin/v1/brands/{brandId}/scrape → triggers immediate scrape job
+GET /api/admin/v1/brands/{brandId}/scrape-jobs → list scrape history
+
+V6 migration
+sqlALTER TABLE size_charts ADD COLUMN scrape_source_url VARCHAR(500);
+CREATE TABLE scrape_jobs (
+    id UUID PRIMARY KEY,
+    brand_id UUID REFERENCES brands(id),
+    status VARCHAR(20) NOT NULL,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    pages_scraped INTEGER DEFAULT 0,
+    entries_found INTEGER DEFAULT 0,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+CONSTRAINTS
+
+Never scrape faster than 1 request per 3 seconds per domain
+Always check robots.txt before scraping a new domain
+Store scrape_source_url for every scraped size chart
+Failed scrape does not overwrite existing active size chart
+All scraper code must handle site layout changes gracefully (try-catch per step)
+
+EXPECTED OUTPUT
+
+BrandScraper.java (interface)
+ZaraScraper.java
+ScraperService.java
+ScrapeScheduler.java
+ScrapeJob.java (entity)
+ScrapeJobRepository.java
+Updated AdminController.java (scrape trigger + history endpoints)
+V6__add_scrape_jobs.sql
+Updated pom.xml (Playwright dependency if not already present)
+
+
+Prompt 9.2 — Additional Brand Scrapers + Admin Scrape UI
+CONTEXT
+FitVision. Zara scraper working. Infrastructure established. Now adding more brands and admin UI to manage scraping.
+OBJECTIVE
+Add scrapers for H&M, Pull&Bear, Mango. Build admin scrape management UI.
+Additional scrapers
+
+HMScraper.java — hm.com size guide pages
+PullAndBearScraper.java — pullandbear.com
+MangoScraper.java — mango.com
+
+BrandScraperRegistry (@Component)
+
+Map<String, BrandScraper> keyed by brand slug
+ScraperService resolves correct scraper by brand slug
+Unknown brands: log warning, skip scrape
+
+Admin Scrape UI (admin/brands/page.tsx additions)
+For each global brand:
+
+Last scraped date (or "Never")
+"Scrape now" button → calls POST /api/admin/v1/brands/{id}/scrape
+Scrape status badge: idle / running / completed / failed
+Link to scrape history
+Manual override button: "Edit size chart" (opens same upload drawer as Phase A3)
+
+Scrape history drawer
+
+List of past scrape jobs with status, timestamp, entries found, error if any
+
+CONSTRAINTS
+
+Each scraper must be independently testable with a mock Playwright browser
+Scrapers should not fail silently — always update ScrapeJob status
+Manual override (admin upload) always takes priority over scraped data
+
+EXPECTED OUTPUT
+
+HMScraper.java, PullAndBearScraper.java, MangoScraper.java
+BrandScraperRegistry.java
+Updated AdminController.java
+Updated admin/brands/page.tsx (scrape management UI)

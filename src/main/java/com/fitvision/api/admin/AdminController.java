@@ -143,6 +143,20 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/brands/{brandId}/scrape")
+    public ResponseEntity<ApiResponse<ScrapeJobResponse>> triggerBrandScrape(@PathVariable UUID brandId) {
+        UUID adminStoreId = requireAdminStoreId();
+        ScrapeJobResponse response = adminService.triggerBrandScrape(brandId, adminStoreId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @GetMapping("/brands/{brandId}/scrape-jobs")
+    public ResponseEntity<ApiResponse<List<ScrapeJobResponse>>> getBrandScrapeJobs(@PathVariable UUID brandId) {
+        UUID adminStoreId = requireAdminStoreId();
+        List<ScrapeJobResponse> jobs = adminService.getBrandScrapeJobs(brandId, adminStoreId);
+        return ResponseEntity.ok(ApiResponse.ok(jobs));
+    }
+
     @GetMapping("/recommendations")
     public ResponseEntity<ApiResponse<Page<AdminRecommendationView>>> getRecommendations(
             @RequestParam(defaultValue = "0") int page,

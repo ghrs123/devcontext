@@ -55,6 +55,12 @@ public class Store {
     @Column(name = "role", nullable = false)
     private String role;
 
+    @Column(name = "shopify_shop", unique = true)
+    private String shopifyShop;
+
+    @Column(name = "shopify_access_token_encrypted", columnDefinition = "TEXT")
+    private String shopifyAccessTokenEncrypted;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

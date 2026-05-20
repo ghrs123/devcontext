@@ -69,6 +69,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/api/admin/seed").permitAll()
+                        .requestMatchers("/api/shopify/**").permitAll()
                         .requestMatchers("/api/dashboard/v1/auth/**").permitAll()
                         .requestMatchers("/api/admin/**").authenticated()
                         .requestMatchers("/api/dashboard/**").authenticated()
@@ -129,10 +130,17 @@ public class SecurityConfig {
         adminCors.setAllowedHeaders(List.of("Authorization", CONTENT_TYPE));
         adminCors.setMaxAge(3600L);
 
+        CorsConfiguration shopifyCors = new CorsConfiguration();
+        shopifyCors.setAllowedOriginPatterns(List.of("*"));
+        shopifyCors.setAllowedMethods(List.of("GET", "POST", OPTIONS));
+        shopifyCors.setAllowedHeaders(List.of("X-FitVision-Shopify-Secret", CONTENT_TYPE));
+        shopifyCors.setMaxAge(3600L);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/widget/**", widgetCors);
         source.registerCorsConfiguration("/api/dashboard/**", dashboardCors);
         source.registerCorsConfiguration("/api/admin/**", adminCors);
+        source.registerCorsConfiguration("/api/shopify/**", shopifyCors);
         return source;
     }
 }

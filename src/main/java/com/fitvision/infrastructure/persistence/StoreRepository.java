@@ -19,6 +19,10 @@ public interface StoreRepository extends JpaRepository<Store, UUID> {
 
     Optional<Store> findByEmail(String email);
 
+    Optional<Store> findByShopifyShop(String shopifyShop);
+
+    Optional<Store> findFirstByRoleAndStatus(String role, String status);
+
     boolean existsByRole(String role);
 
         long countByStatus(String status);

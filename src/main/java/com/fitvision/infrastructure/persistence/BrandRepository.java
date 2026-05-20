@@ -36,4 +36,13 @@ public interface BrandRepository extends JpaRepository<Brand, UUID> {
 
     @Query("SELECT b FROM Brand b WHERE b.deletedAt IS NULL AND b.id = :id AND b.tenantId IS NULL")
     Optional<Brand> findGlobalById(@Param("id") UUID id);
+
+        @Query("""
+                        SELECT b FROM Brand b
+                        WHERE b.deletedAt IS NULL
+                            AND b.tenantId IS NULL
+                            AND (b.lastScrapedAt IS NULL OR b.lastScrapedAt < :cutoff)
+                        ORDER BY b.lastScrapedAt ASC NULLS FIRST, b.createdAt ASC
+                        """)
+        List<Brand> findGlobalBrandsNeedingScrape(@Param("cutoff") java.time.LocalDateTime cutoff);
 }
