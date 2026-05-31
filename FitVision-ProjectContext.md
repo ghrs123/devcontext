@@ -594,14 +594,7 @@ V8 — add_scrape_jobs              Phase 9.1 (next)
 - Admin subscription view per store
 - Level 2 admin: plan override, revenue metrics, store impersonation
 
-### Phase 11 — Production Deployment
-- Railway (backend) + Vercel (dashboard) + Cloudflare CDN (widget)
-- Neon PostgreSQL (production, serverless)
-- Cloudflare R2 (file storage for size chart uploads)
-- Resend (transactional email: welcome, API key regenerated, plan upgraded)
-- SSL + custom domains: fitvision.io, app.fitvision.io, api.fitvision.io
-- CI/CD: GitHub Actions → build → test → deploy
-- Environment variables audit
+### Phase 11 — Production Deployment ✅ COMPLETE
 
 ### Phase 12 — Observability & Operations
 - Structured logging with correlation IDs
@@ -674,7 +667,7 @@ docker logs devcontext-fitvision-backend-1 --tail 30
 - Pricing tiers finalisation
 - Initial brand database (Zara confirmed; H&M, Pull&Bear, Mango planned for Phase 9.3)
 - Stripe integration timing (Phase 10)
-- Production database: Neon vs Railway PostgreSQL
+- Production database: Neon PostgreSQL (chosen)
 - Store detail full product list endpoint (deferred — add in Phase 10 or standalone)
 # FitVision — Phase 2 Prompts: Recommendation Engine
 
