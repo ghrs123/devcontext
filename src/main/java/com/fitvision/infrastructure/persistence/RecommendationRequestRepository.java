@@ -103,4 +103,59 @@ public interface RecommendationRequestRepository extends JpaRepository<Recommend
                                                          @Param("productId") UUID productId,
                                                          @Param("quality") String quality,
                                                          Pageable pageable);
+
+    @Query("SELECT MAX(r.createdAt) FROM RecommendationRequest r")
+    LocalDateTime findLastRecommendationAt();
+
+    @Query("SELECT COUNT(DISTINCT r.tenantId) FROM RecommendationRequest r WHERE r.createdAt >= :since")
+    long countDistinctTenantsSince(@Param("since") LocalDateTime since);
+
+    @Query("SELECT AVG(r.durationMs) FROM RecommendationRequest r WHERE r.createdAt >= :since AND r.durationMs IS NOT NULL")
+    Double findAvgDurationSince(@Param("since") LocalDateTime since);
+
+    @Query(value = """
+            SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms)
+            FROM recommendation_requests
+            WHERE created_at >= :since AND duration_ms IS NOT NULL
+            """, nativeQuery = true)
+    Double findP50DurationSince(@Param("since") LocalDateTime since);
+
+    @Query(value = """
+            SELECT PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms)
+            FROM recommendation_requests
+            WHERE created_at >= :since AND duration_ms IS NOT NULL
+            """, nativeQuery = true)
+    Double findP95DurationSince(@Param("since") LocalDateTime since);
+
+    @Query(value = """
+            SELECT PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY duration_ms)
+            FROM recommendation_requests
+            WHERE created_at >= :since AND duration_ms IS NOT NULL
+            """, nativeQuery = true)
+    Double findP99DurationSince(@Param("since") LocalDateTime since);
+
+    @Query("""
+        SELECT COUNT(r)
+        FROM RecommendationRequest r
+        WHERE r.createdAt >= :since
+          AND (
+            (:quality = 'NO_MATCH' AND (r.recommendedSize = 'NO_MATCH' OR r.confidenceScore = 0))
+         OR (:quality = 'EXACT' AND r.recommendedSize <> 'NO_MATCH' AND r.confidenceScore >= 1.0)
+         OR (:quality = 'PARTIAL' AND r.recommendedSize <> 'NO_MATCH' AND r.confidenceScore >= 0.5 AND r.confidenceScore < 1.0)
+         OR (:quality = 'CLOSEST' AND r.recommendedSize <> 'NO_MATCH' AND r.confidenceScore > 0 AND r.confidenceScore < 0.5)
+          )
+        """)
+    long countByQualitySince(@Param("since") LocalDateTime since, @Param("quality") String quality);
+
+    @Query("""
+        SELECT r.tenantId,
+               COALESCE(s.name, 'Unknown Store'),
+               COUNT(r)
+        FROM RecommendationRequest r
+        LEFT JOIN com.fitvision.domain.store.Store s ON s.id = r.tenantId
+        WHERE r.createdAt >= :since
+        GROUP BY r.tenantId, s.name
+        ORDER BY COUNT(r) DESC
+        """)
+    List<Object[]> findTopStoresSince(@Param("since") LocalDateTime since, Pageable pageable);
 }

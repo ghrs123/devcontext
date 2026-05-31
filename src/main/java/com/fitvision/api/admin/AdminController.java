@@ -1,6 +1,7 @@
 package com.fitvision.api.admin;
 
 import com.fitvision.api.dashboard.brand.BrandResponse;
+import com.fitvision.domain.admin.AdminHealthService;
 import com.fitvision.domain.admin.AdminService;
 import com.fitvision.domain.sizechart.ParseResult;
 import com.fitvision.domain.sizechart.SizeChartFileParser;
@@ -45,12 +46,32 @@ public class AdminController {
     private static final Logger log = LoggerFactory.getLogger(AdminController.class);
 
     private final AdminService adminService;
+    private final AdminHealthService adminHealthService;
     private final SizeChartParserFactory parserFactory;
 
     public AdminController(AdminService adminService,
+                           AdminHealthService adminHealthService,
                            SizeChartParserFactory parserFactory) {
         this.adminService = adminService;
+        this.adminHealthService = adminHealthService;
         this.parserFactory = parserFactory;
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<ApiResponse<AdminHealthResponse>> getHealth() {
+        return ResponseEntity.ok(ApiResponse.ok(adminHealthService.getHealth()));
+    }
+
+    @GetMapping("/recommendations/stats")
+    public ResponseEntity<ApiResponse<RecommendationStatsResponse>> getRecommendationStats() {
+        return ResponseEntity.ok(ApiResponse.ok(
+                adminHealthService.getRecommendationStats(java.time.Duration.ofHours(24))));
+    }
+
+    @PostMapping("/scrape-jobs/trigger-all")
+    public ResponseEntity<ApiResponse<ScrapeTriggerAllResponse>> triggerAllScrapes() {
+        UUID adminStoreId = requireAdminStoreId();
+        return ResponseEntity.ok(ApiResponse.ok(adminHealthService.triggerAllScrapes(adminStoreId)));
     }
 
     @GetMapping("/metrics")

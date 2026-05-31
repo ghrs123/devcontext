@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Building2, LayoutDashboard, LogOut, Tags, X } from 'lucide-react';
+import { BarChart3, Building2, HeartPulse, LayoutDashboard, LogOut, Tags, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -17,7 +17,8 @@ const items = [
   { href: '/admin/dashboard', label: 'Platform Overview', icon: LayoutDashboard },
   { href: '/admin/stores', label: 'Stores', icon: Building2 },
   { href: '/admin/brands', label: 'Global Brands', icon: Tags },
-  { href: '/admin/recommendations', label: 'Recommendations', icon: BarChart3 }
+  { href: '/admin/recommendations', label: 'Recommendations', icon: BarChart3 },
+  { href: '/admin/health', label: 'System Health', icon: HeartPulse }
 ];
 
 export function AdminSidebar({ mobileOpen, onClose, onLogout }: Readonly<AdminSidebarProps>) {

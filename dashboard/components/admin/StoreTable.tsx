@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { api, ApiError } from '@/lib/api';
+import { ApiError } from '@/lib/api';
 import type { AdminRecommendation, SpringPage, StoreAdminView } from '@/lib/types';
 
 type StoreTableProps = {

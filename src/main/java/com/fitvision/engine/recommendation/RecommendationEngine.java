@@ -86,82 +86,100 @@ public class RecommendationEngine {
      */
     @Transactional
     public RecommendationOutput recommend(RecommendationInput input) {
-        // Check recommendation limit before processing (fails fast on 402).
-        planLimitsService.checkRecommendationLimit(input.getTenantId());
+        long start = System.currentTimeMillis();
+        UUID tenantId = input.getTenantId();
+        UUID resolvedProductId = input.getProductId();
+        MatchResult.MatchQuality loggedQuality = null;
 
-        Gender gender = input.getGender() != null ? input.getGender() : Gender.UNISEX;
+        try {
+            // Check recommendation limit before processing (fails fast on 402).
+            planLimitsService.checkRecommendationLimit(input.getTenantId());
 
-        // Step 1: Validate inputs and compute BodyProfile.
-        // BodyProfileCalculator throws InvalidBodyMeasurementException on out-of-range values.
-        BodyProfile profile = bodyProfileCalculator.calculate(
-                input.getHeightCm(), input.getWeightKg(), gender, input.getAge());
-        log.debug("BodyProfile computed: {}", profile);
+            Gender gender = input.getGender() != null ? input.getGender() : Gender.UNISEX;
 
-        // Step 2: Resolve product — tenant-scoped.
-        // Support lookup by UUID (dashboard) or by externalProductId (widget).
-        Product product;
-        if (input.getProductId() != null) {
-            product = productRepository.findByIdAndTenantId(input.getProductId(), input.getTenantId())
-                    .orElseThrow(() -> new ProductNotFoundException(
-                            "Product not found: productId=" + input.getProductId()
-                                    + ", tenantId=" + input.getTenantId()));
-        } else {
-            product = productRepository
-                    .findByExternalProductIdAndTenantId(input.getExternalProductId(), input.getTenantId())
-                    .orElseThrow(() -> new ProductNotFoundException(
-                            "Product not found: externalProductId=" + input.getExternalProductId()
-                                    + ", tenantId=" + input.getTenantId()));
-        }
+            // Step 1: Validate inputs and compute BodyProfile.
+            // BodyProfileCalculator throws InvalidBodyMeasurementException on out-of-range values.
+            BodyProfile profile = bodyProfileCalculator.calculate(
+                    input.getHeightCm(), input.getWeightKg(), gender, input.getAge());
+            log.debug("BodyProfile computed: {}", profile);
 
-        String productName = product.getName();
-        String brandName = brandRepository.findById(product.getBrandId())
-                .map(Brand::getName)
-                .orElse(null);
+            // Step 2: Resolve product — tenant-scoped.
+            // Support lookup by UUID (dashboard) or by externalProductId (widget).
+            Product product;
+            if (input.getProductId() != null) {
+                product = productRepository.findByIdAndTenantId(input.getProductId(), input.getTenantId())
+                        .orElseThrow(() -> new ProductNotFoundException(
+                                "Product not found: productId=" + input.getProductId()
+                                        + ", tenantId=" + input.getTenantId()));
+            } else {
+                product = productRepository
+                        .findByExternalProductIdAndTenantId(input.getExternalProductId(), input.getTenantId())
+                        .orElseThrow(() -> new ProductNotFoundException(
+                                "Product not found: externalProductId=" + input.getExternalProductId()
+                                        + ", tenantId=" + input.getTenantId()));
+            }
 
-        // Step 3: Find active size chart — graceful fallback if absent (no exception).
-        Optional<SizeChart> sizeChartOpt = sizeChartRepository
-                .findActiveByProductIdAndTenantId(product.getId(), input.getTenantId());
+            resolvedProductId = product.getId();
 
-        if (sizeChartOpt.isEmpty()) {
-            log.info("Recommendation fallback: tenantId={}, productId={} — no active size chart.",
-                    input.getTenantId(), product.getId());
+            String productName = product.getName();
+            String brandName = brandRepository.findById(product.getBrandId())
+                    .map(Brand::getName)
+                    .orElse(null);
+
+            // Step 3: Find active size chart — graceful fallback if absent (no exception).
+            Optional<SizeChart> sizeChartOpt = sizeChartRepository
+                    .findActiveByProductIdAndTenantId(product.getId(), input.getTenantId());
+
+            if (sizeChartOpt.isEmpty()) {
+                log.info("Recommendation fallback: tenantId={}, productId={} — no active size chart.",
+                        input.getTenantId(), product.getId());
+                loggedQuality = MatchResult.MatchQuality.NO_MATCH;
+                return RecommendationOutput.builder()
+                        .recommendedSize(null)
+                        .confidenceScore(0.0)
+                        .quality(MatchResult.MatchQuality.NO_MATCH)
+                        .productName(productName)
+                        .brandName(brandName)
+                        .hasSizeChart(false)
+                        .fallbackUrl(null)
+                        .build();
+            }
+
+            // Step 4: Load size entries.
+            List<SizeEntry> entries = sizeEntryRepository.findAllBySizeChartId(sizeChartOpt.get().getId());
+
+            // Step 5: Match BodyProfile against size entries.
+            MatchResult matchResult = sizeChartMatcher.match(profile, entries);
+
+            // Step 6: Persist analytics record (GDPR-aware).
+            persistAnalytics(input, product, gender, matchResult, System.currentTimeMillis() - start);
+
+            // Increment monthly counter after successful recommendation.
+            planLimitsService.incrementRecommendationCount(input.getTenantId());
+
+            loggedQuality = matchResult.getQuality();
+
+            // Step 7: Return output.
             return RecommendationOutput.builder()
-                    .recommendedSize(null)
-                    .confidenceScore(0.0)
-                    .quality(MatchResult.MatchQuality.NO_MATCH)
+                    .recommendedSize(matchResult.getRecommendedSize())
+                    .confidenceScore(matchResult.getConfidenceScore())
+                    .quality(matchResult.getQuality())
                     .productName(productName)
                     .brandName(brandName)
-                    .hasSizeChart(false)
+                    .hasSizeChart(true)
                     .fallbackUrl(null)
                     .build();
+        } finally {
+            if (loggedQuality != null) {
+                long duration = System.currentTimeMillis() - start;
+                log.info("recommendation_completed tenantId={} productId={} durationMs={} quality={}",
+                        tenantId, resolvedProductId, duration, loggedQuality);
+                if (duration > 500) {
+                    log.warn("slow_recommendation tenantId={} productId={} durationMs={}",
+                            tenantId, resolvedProductId, duration);
+                }
+            }
         }
-
-        // Step 4: Load size entries.
-        List<SizeEntry> entries = sizeEntryRepository.findAllBySizeChartId(sizeChartOpt.get().getId());
-
-        // Step 5: Match BodyProfile against size entries.
-        MatchResult matchResult = sizeChartMatcher.match(profile, entries);
-
-        // Step 6: Persist analytics record (GDPR-aware).
-        persistAnalytics(input, product, gender, matchResult);
-
-        // Increment monthly counter after successful recommendation.
-        planLimitsService.incrementRecommendationCount(input.getTenantId());
-
-        log.info("Recommendation: tenantId={}, productId={}, recommendedSize={}, confidenceScore={}, quality={}",
-                input.getTenantId(), product.getId(),
-                matchResult.getRecommendedSize(), matchResult.getConfidenceScore(), matchResult.getQuality());
-
-        // Step 7: Return output.
-        return RecommendationOutput.builder()
-                .recommendedSize(matchResult.getRecommendedSize())
-                .confidenceScore(matchResult.getConfidenceScore())
-                .quality(matchResult.getQuality())
-                .productName(productName)
-                .brandName(brandName)
-                .hasSizeChart(true)
-                .fallbackUrl(null)
-                .build();
     }
 
     /**
@@ -173,7 +191,8 @@ public class RecommendationEngine {
     private void persistAnalytics(RecommendationInput input,
                                    Product product,
                                    Gender gender,
-                                   MatchResult matchResult) {
+                                   MatchResult matchResult,
+                                   long durationMs) {
         boolean store = input.isStoreBodyData();
         BigDecimal heightCm = store
                 ? BigDecimal.valueOf(input.getHeightCm())
@@ -198,6 +217,7 @@ public class RecommendationEngine {
                 .recommendedSize(recommendedSize)
                 .confidenceScore(BigDecimal.valueOf(matchResult.getConfidenceScore()))
                 .bodyMeasurementsStored(store)
+                .durationMs((int) Math.min(durationMs, Integer.MAX_VALUE))
                 .createdAt(LocalDateTime.now())
                 .build();
 

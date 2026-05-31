@@ -21,7 +21,6 @@ function slugPreview(value: string): string {
     .replaceAll(/^-|-$/g, '');
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity
 export default function ProductsPage() {
   const [search, setSearch] = useState('');
   const [brandsOpen, setBrandsOpen] = useState(true);

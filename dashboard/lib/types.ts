@@ -210,3 +210,43 @@ export interface BillingStatusResponse {
   recommendationsUsed: number;
   recommendationsLimit: number;
 }
+
+export interface AdminHealthResponse {
+  database: { status: 'UP' | 'DOWN' | string; latencyMs: number };
+  recommendationEngine: { avgLatencyMs: number | null; p95LatencyMs: number | null };
+  scrapeJobs: { running: number; failedLast7Days: number };
+  storeActivity: {
+    recommendationsLast24h: number;
+    activeStoresLast24h: number;
+    lastRecommendationAt: string | null;
+  };
+  brandScrapes: BrandScrapeStatus[];
+}
+
+export interface BrandScrapeStatus {
+  brandId: string;
+  brandName: string;
+  status: ScrapeJobStatus | null;
+  timestamp: string | null;
+  entriesFound: number | null;
+  scraperAvailable: boolean;
+}
+
+export interface RecommendationStatsResponse {
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
+  p99LatencyMs: number | null;
+  qualityDistribution: Record<string, number>;
+  topStores: StoreRecommendationStat[];
+}
+
+export interface StoreRecommendationStat {
+  storeId: string;
+  storeName: string;
+  recommendationCount: number;
+}
+
+export interface ScrapeTriggerAllResponse {
+  triggered: number;
+  skipped: number;
+}

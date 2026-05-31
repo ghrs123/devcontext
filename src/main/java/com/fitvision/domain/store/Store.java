@@ -90,5 +90,8 @@ public class Store {
         if (role == null || role.isBlank()) {
             role = StoreRole.STORE.name();
         }
+        if (recommendationsCountCurrentMonth == null) {
+            recommendationsCountCurrentMonth = 0;
+        }
     }
 }

@@ -3,6 +3,7 @@ import type {
   AdminMetrics,
   AdminRecommendation,
   AdminRecommendationFilters,
+  AdminHealthResponse,
   AnalyticsSummary,
   ApiEnvelope,
   ApiKeys,
@@ -17,6 +18,8 @@ import type {
   SpringPage,
   StoreAdminView,
   RegisterRequest,
+  RecommendationStatsResponse,
+  ScrapeTriggerAllResponse,
   SizeChartUploadResult,
   SizeEntryData,
   StoreProfile,
@@ -384,6 +387,20 @@ export const api = {
 
   createPortalSession(): Promise<{ portalUrl: string }> {
     return request<{ portalUrl: string }>('/api/dashboard/v1/billing/portal', {
+      method: 'POST'
+    });
+  },
+
+  adminGetHealth(): Promise<AdminHealthResponse> {
+    return request<AdminHealthResponse>('/api/admin/v1/health');
+  },
+
+  adminGetRecommendationStats(): Promise<RecommendationStatsResponse> {
+    return request<RecommendationStatsResponse>('/api/admin/v1/recommendations/stats');
+  },
+
+  adminTriggerAllScrapes(): Promise<ScrapeTriggerAllResponse> {
+    return request<ScrapeTriggerAllResponse>('/api/admin/v1/scrape-jobs/trigger-all', {
       method: 'POST'
     });
   }

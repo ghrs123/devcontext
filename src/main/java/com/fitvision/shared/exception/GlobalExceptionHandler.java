@@ -1,7 +1,9 @@
 package com.fitvision.shared.exception;
 
 import com.fitvision.domain.billing.PlanLimitException;
+import com.fitvision.infrastructure.security.TenantContext;
 import com.fitvision.shared.response.ApiResponse;
+import io.sentry.Sentry;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
@@ -12,6 +14,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+
+import java.util.UUID;
 
 @RestControllerAdvice
 @Slf4j
@@ -62,8 +66,29 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneric(Exception ex) {
         log.error("Unexpected error [requestId={}]", MDC.get("requestId"), ex);
+        captureUnexpectedException(ex);
         return ResponseEntity.internalServerError()
                 .body(ApiResponse.error(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred"));
+    }
+
+    private void captureUnexpectedException(Exception ex) {
+        Sentry.configureScope(scope -> {
+            String requestId = MDC.get("requestId");
+            if (requestId != null) {
+                scope.setTag("requestId", requestId);
+            }
+            String tenantId = MDC.get(TenantContext.MDC_TENANT_ID_KEY);
+            if (tenantId == null) {
+                UUID ctxTenantId = TenantContext.get();
+                if (ctxTenantId != null) {
+                    tenantId = ctxTenantId.toString();
+                }
+            }
+            if (tenantId != null) {
+                scope.setTag("tenantId", tenantId);
+            }
+        });
+        Sentry.captureException(ex);
     }
 
     private HttpStatus resolveStatus(ErrorCode code) {

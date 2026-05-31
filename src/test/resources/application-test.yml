@@ -32,7 +32,17 @@ logging:
     org.testcontainers: INFO
     com.zaxxer.hikari: WARN
 
+stripe:
+  webhook-secret: whsec_test_placeholder
+  prices:
+    starter: price_test_starter
+    pro: price_test_pro
+    team: price_test_team
+
 fitvision:
   jwt:
     secret: "fitvision-test-secret-change-this-in-production-32-bytes-minimum!"
     expiration-hours: 24
+  shopify:
+    encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    shared-secret: fitvision-shopify-test-secret

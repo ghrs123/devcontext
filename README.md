@@ -66,3 +66,66 @@ curl https://<your-railway-domain>/actuator/health
 ```
 
 Expect HTTP 200 with `"status":"UP"`.
+
+## Widget CDN (Cloudflare R2)
+
+The embeddable widget is built from `widget/` and published to Cloudflare R2. Stores load it from the CDN (not from the backend or Vercel).
+
+| Item | Value |
+|------|--------|
+| R2 bucket | `fitvision-widget` |
+| Object prefix | `widget/` |
+| Public URL | `https://cdn.fitvision.io/widget/` |
+| Latest script | `https://cdn.fitvision.io/widget/fitvision-widget.min.js` |
+| Versioned script | `https://cdn.fitvision.io/widget/fitvision-widget.{version}.min.js` (from `widget/package.json`) |
+
+### Cache-Control strategy
+
+| Artifact | Cache-Control |
+|----------|----------------|
+| `fitvision-widget.min.js` (latest) | `public, max-age=300` (5 minutes) |
+| `fitvision-widget.{version}.min.js` | `public, max-age=31536000, immutable` (1 year) |
+
+Pin production embeds to the versioned URL when you need a stable, long-cached asset; use the latest URL when you want automatic updates after each deploy.
+
+### CORS
+
+Allow browser `GET` from any storefront origin (Shopify and custom domains). Example R2 bucket CORS policy:
+
+```json
+[
+  {
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+### Cloudflare dashboard setup (one-time)
+
+1. **R2 bucket** — Create bucket `fitvision-widget` in the Cloudflare dashboard (R2 → Create bucket).
+2. **Public access** — Enable public access for the bucket (or connect a custom domain) so objects are served over HTTPS.
+3. **Custom domain** — Add `cdn.fitvision.io` as a custom domain for the bucket (or via Cloudflare CDN rules) with path prefix `/widget/` mapping to the `widget/` object prefix.
+4. **CORS** — Paste the JSON policy above under the bucket’s CORS settings.
+5. **API token** — Create a token with R2 read/write for CI uploads (used by GitHub Actions).
+
+### GitHub Actions (widget)
+
+Pushes to `main` that touch `widget/**` run [`.github/workflows/widget.yml`](.github/workflows/widget.yml): `npm ci`, `npm run build` (produces latest + versioned files in `dist/`), then `wrangler r2 object put` for both artifacts with the cache headers above.
+
+### GitHub repository secrets (CI/CD)
+
+Configure these under **Settings → Secrets and variables → Actions**:
+
+| Secret | Used by |
+|--------|---------|
+| `RAILWAY_TOKEN` | `backend.yml` — Railway project deploy token |
+| `VERCEL_TOKEN` | `dashboard.yml` |
+| `VERCEL_ORG_ID` | `dashboard.yml` |
+| `VERCEL_PROJECT_ID` | `dashboard.yml` |
+| `NEXT_PUBLIC_API_URL` | `dashboard.yml` — e.g. `https://api.fitvision.io` |
+| `CLOUDFLARE_API_TOKEN` | `widget.yml` — R2 object upload |
+
+Backend and dashboard workflows are defined in [`.github/workflows/backend.yml`](.github/workflows/backend.yml) and [`.github/workflows/dashboard.yml`](.github/workflows/dashboard.yml).

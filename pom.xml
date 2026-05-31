@@ -150,6 +150,20 @@
             <version>24.3.0</version>
         </dependency>
 
+        <!-- Structured JSON logging (production) -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>7.4</version>
+        </dependency>
+
+        <!-- Error monitoring -->
+        <dependency>
+            <groupId>io.sentry</groupId>
+            <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
+            <version>7.6.0</version>
+        </dependency>
+
         <!-- Testcontainers (version managed by Spring Boot BOM) -->
         <dependency>
             <groupId>org.testcontainers</groupId>

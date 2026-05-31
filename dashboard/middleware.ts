@@ -4,6 +4,19 @@ import type { NextRequest } from 'next/server';
 const storeProtectedPrefixes = ['/dashboard', '/products', '/settings'];
 const adminProtectedPrefixes = ['/admin'];
 const authRoutes = ['/login', '/register'];
+const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24;
+
+function withProductionCookie(response: NextResponse, token: string | undefined): NextResponse {
+  if (process.env.NODE_ENV === 'production' && token) {
+    response.cookies.set('fitvision_token', token, {
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+      maxAge: COOKIE_MAX_AGE_SECONDS
+    });
+  }
+  return response;
+}
 
 function decodeRoleFromToken(token: string | undefined): string | null {
   if (!token) {
@@ -42,7 +55,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (isStoreProtected && role === 'ADMIN') {
-    return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    return withProductionCookie(
+      NextResponse.redirect(new URL('/admin/dashboard', request.url)),
+      token
+    );
   }
 
   if (isAdminProtected && role !== 'ADMIN') {
@@ -51,10 +67,10 @@ export function middleware(request: NextRequest) {
 
   if (isAuthRoute && token) {
     const target = role === 'ADMIN' ? '/admin/dashboard' : '/dashboard';
-    return NextResponse.redirect(new URL(target, request.url));
+    return withProductionCookie(NextResponse.redirect(new URL(target, request.url)), token);
   }
 
-  return NextResponse.next();
+  return withProductionCookie(NextResponse.next(), token);
 }
 
 export const config = {

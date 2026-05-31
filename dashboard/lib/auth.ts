@@ -6,13 +6,20 @@ function isBrowser(): boolean {
   return typeof window !== 'undefined';
 }
 
+function cookieSuffix(): string {
+  if (process.env.NODE_ENV === 'production') {
+    return 'Path=/; SameSite=Strict; Secure';
+  }
+  return 'Path=/; SameSite=Lax';
+}
+
 export function saveToken(token: string): void {
   if (!isBrowser()) {
     return;
   }
 
   window.localStorage.setItem(TOKEN_KEY, token);
-  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; Max-Age=${COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`;
+  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; Max-Age=${COOKIE_MAX_AGE_SECONDS}; ${cookieSuffix()}`;
 }
 
 export function getToken(): string | null {
@@ -28,7 +35,7 @@ export function clearToken(): void {
   }
 
   window.localStorage.removeItem(TOKEN_KEY);
-  document.cookie = `${TOKEN_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+  document.cookie = `${TOKEN_COOKIE}=; Max-Age=0; ${cookieSuffix()}`;
 }
 
 export function isAuthenticated(): boolean {
