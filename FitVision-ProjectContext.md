@@ -594,7 +594,14 @@ V8 — add_scrape_jobs              Phase 9.1 (next)
 - Admin subscription view per store
 - Level 2 admin: plan override, revenue metrics, store impersonation
 
-### Phase 11 — Production Deployment ✅ COMPLETE
+### Phase 11 — Production Deployment
+- Railway (backend) + Vercel (dashboard) + Cloudflare CDN (widget)
+- Neon PostgreSQL (production, serverless)
+- Cloudflare R2 (file storage for size chart uploads)
+- Resend (transactional email: welcome, API key regenerated, plan upgraded)
+- SSL + custom domains: fitvision.io, app.fitvision.io, api.fitvision.io
+- CI/CD: GitHub Actions → build → test → deploy
+- Environment variables audit
 
 ### Phase 12 — Observability & Operations
 - Structured logging with correlation IDs
@@ -667,7 +674,7 @@ docker logs devcontext-fitvision-backend-1 --tail 30
 - Pricing tiers finalisation
 - Initial brand database (Zara confirmed; H&M, Pull&Bear, Mango planned for Phase 9.3)
 - Stripe integration timing (Phase 10)
-- Production database: Neon PostgreSQL (chosen)
+- Production database: Neon vs Railway PostgreSQL
 - Store detail full product list endpoint (deferred — add in Phase 10 or standalone)
 # FitVision — Phase 2 Prompts: Recommendation Engine
 
@@ -4038,3 +4045,828 @@ Frontend:
 - [ ] "Force re-scrape all" triggers scrape jobs for all brands
 - [ ] Health page auto-refreshes every 30 seconds
 - [ ] Failed scrapes last 7 days visible with count
+
+# FitVision — Phase T1 Prompts: Backend Integration Tests
+
+> Pre-condition: All phases 1–12 complete. Existing tests: 77 passing (45 unit + 32 integration). AbstractIntegrationTest uses singleton Testcontainers pattern. Next migration is V11.
+
+---
+
+## Prompt T1.1 — Core Flow Integration Tests
+
+### CONTEXT
+FitVision backend. Existing integration tests cover basic CRUD and widget API. Missing coverage: full end-to-end business flows, billing enforcement, admin operations, and Shopify webhook handling.
+
+All integration tests extend AbstractIntegrationTest which starts a singleton PostgreSQL container and runs all Flyway migrations.
+
+### OBJECTIVE
+Add integration tests for the critical business flows not currently covered.
+
+**Test class: StoreRegistrationFlowIT** (extends AbstractIntegrationTest)
+
+Test: full registration and login flow
+```java
+@Test
+void register_login_getProfile_returnsCorrectData() {
+    // POST /api/dashboard/v1/auth/register
+    // POST /api/dashboard/v1/auth/login → extract JWT
+    // GET /api/dashboard/v1/stores/profile → assert name, email, plan=FREE
+}
+
+@Test
+void register_duplicateEmail_returns409() {
+    // Register same email twice → second returns 409
+}
+
+@Test
+void login_wrongPassword_returns401() {}
+
+@Test
+void login_unknownEmail_returns401() {}
+```
+
+**Test class: ProductFlowIT** (extends AbstractIntegrationTest)
+
+```java
+@Test
+void createProduct_withoutBrand_succeeds() {
+    // Register + login
+    // POST /api/dashboard/v1/products with no brandId
+    // Assert 201, product returned with brandId=null
+}
+
+@Test
+void createProduct_withBrand_succeeds() {
+    // Create brand first
+    // Create product with brandId
+    // Assert brand association
+}
+
+@Test
+void createProduct_exceedsFreePlanLimit_returns402() {
+    // Create 2 products (FREE plan limit)
+    // Create 3rd product → assert 402, code=PLAN_LIMIT_REACHED
+}
+
+@Test
+void softDeleteProduct_disappearsFromList() {
+    // Create → DELETE → GET list → assert not present
+    // GET by id → assert 404
+}
+
+@Test
+void updateProduct_partialUpdate_onlyChangesSpecifiedFields() {}
+```
+
+**Test class: SizeChartFlowIT** (extends AbstractIntegrationTest)
+
+```java
+@Test
+void uploadCsv_validFile_createsActiveSizeChart() {
+    // Create product
+    // POST /api/dashboard/v1/size-charts/{productId}/upload with valid CSV
+    // GET /api/dashboard/v1/size-charts/{productId}/active
+    // Assert entries present
+}
+
+@Test
+void uploadCsv_secondUpload_replacesActiveChart() {
+    // Upload twice → assert only second is active
+    // Assert version incremented
+}
+
+@Test
+void uploadCsv_invalidFormat_returns400() {
+    // Upload CSV missing required columns → assert 400
+}
+
+@Test
+void uploadCsv_exceedsFileSize_returns400() {
+    // Upload file > 2MB → assert 400
+}
+
+@Test
+void manualEntry_createsActiveSizeChart() {
+    // POST /api/dashboard/v1/size-charts/{productId}/manual
+    // Assert entries match input
+}
+```
+
+**Test class: RecommendationFlowIT** (extends AbstractIntegrationTest)
+
+```java
+@Test
+void recommendation_withSizeChart_returnsCorrectSize() {
+    // Setup: store → product → size chart (S:38.5-44.5, M:42.5-48.5, L:46.5-52.5)
+    // POST /api/widget/v1/size-recommendation
+    //   { apiKey, productId, heightCm:175, weightKg:75, gender:MALE }
+    // Assert: recommended size present, hasSizeChart=true, confidenceLabel in [High,Medium,Low]
+}
+
+@Test
+void recommendation_withoutSizeChart_returnsFallback() {
+    // Product with no size chart
+    // Assert: hasSizeChart=false, no size recommended
+}
+
+@Test
+void recommendation_invalidApiKey_returns401() {}
+
+@Test
+void recommendation_inactiveStore_returns401() {
+    // Deactivate store via admin
+    // Widget call → assert 401
+}
+
+@Test
+void recommendation_exceedsMonthlyLimit_returnsPlanLimitFallback() {
+    // Set recommendations_count_current_month to limit for FREE plan (100)
+    // Next recommendation → assert planLimitFallback response (200, not 402)
+}
+
+@Test
+void recommendation_outOfRangeBmi_returnsNoMatch() {
+    // BMI < 15 or > 45 → OUT_OF_RANGE quality
+}
+```
+
+**Test class: AnalyticsFlowIT** (extends AbstractIntegrationTest)
+
+```java
+@Test
+void analyticsSummary_afterRecommendations_returnsCorrectCounts() {
+    // Make 5 recommendations with known qualities
+    // GET /api/dashboard/v1/analytics/summary
+    // Assert totalRecommendations=5, quality distribution matches
+}
+
+@Test
+void analyticsList_pagination_returnsCorrectPage() {
+    // Make 15 recommendations
+    // GET ?page=0&size=10 → assert 10 results
+    // GET ?page=1&size=10 → assert 5 results
+}
+```
+
+### CONSTRAINTS
+- All tests must be independent — no shared state between test methods
+- Use @BeforeEach to register a fresh store and get JWT for each test
+- Helper methods: registerAndLogin(), createProduct(), uploadTestCsv()
+- Test CSV loaded from src/test/resources/test-data/size-chart-tops.csv
+- Never hardcode UUIDs — always use IDs returned from API calls
+- Each test class reuses the singleton Testcontainers instance
+
+### EXPECTED OUTPUT
+- StoreRegistrationFlowIT.java
+- ProductFlowIT.java
+- SizeChartFlowIT.java
+- RecommendationFlowIT.java
+- AnalyticsFlowIT.java
+- src/test/resources/test-data/size-chart-tops.csv (valid test fixture)
+- Updated AbstractIntegrationTest.java (shared helper methods if not already present)
+
+### NEXT STEP
+Prompt T1.2 adds billing, admin, and Shopify webhook integration tests.
+
+---
+
+## Prompt T1.2 — Billing, Admin, and Shopify Integration Tests
+
+### CONTEXT
+FitVision backend. Core flow tests complete (T1.1). Now covering billing enforcement, admin operations, and Shopify webhook handling.
+
+Stripe is NOT called in tests — StripeService must be mocked. Use @MockBean StripeService in billing tests.
+
+### OBJECTIVE
+Integration tests for billing, admin, and Shopify flows.
+
+**Test class: BillingFlowIT** (extends AbstractIntegrationTest)
+
+```java
+@MockBean
+private StripeService stripeService;
+
+@Test
+void billingStatus_freePlan_returnsCorrectLimits() {
+    // Register store
+    // GET /api/dashboard/v1/billing/status
+    // Assert plan=FREE, productsLimit=2, recommendationsLimit=100
+}
+
+@Test
+void checkout_validPlan_returnsCheckoutUrl() {
+    // Mock stripeService.createCheckoutSession() → return "https://checkout.stripe.com/test"
+    // POST /api/dashboard/v1/billing/checkout { priceId: "price_starter" }
+    // Assert checkoutUrl returned
+}
+
+@Test
+void stripeWebhook_subscriptionCreated_upgradesPlan() {
+    // POST /api/billing/webhooks with valid Stripe signature
+    // Event: customer.subscription.created, plan=STARTER
+    // Assert store plan updated to STARTER in database
+    // Assert productsLimit=10 in billing status
+}
+
+@Test
+void stripeWebhook_subscriptionDeleted_downgradeToFree() {
+    // Setup store with STARTER plan
+    // POST webhook: customer.subscription.deleted
+    // Assert plan=FREE, subscription_status=inactive
+}
+
+@Test
+void stripeWebhook_invalidSignature_returns400() {
+    // POST /api/billing/webhooks without valid Stripe-Signature header
+    // Assert 400
+}
+
+@Test
+void planLimitReset_newMonth_resetsCounter() {
+    // Set recommendations_count_current_month=100, reset_at=last month
+    // Make recommendation → assert counter reset to 1, new reset_at = this month
+}
+```
+
+**Test class: AdminFlowIT** (extends AbstractIntegrationTest)
+
+```java
+@Test
+void adminSeed_firstCall_createsAdmin() {
+    // POST /api/admin/seed
+    // Assert 200, JWT returned with role=ADMIN
+}
+
+@Test
+void adminSeed_secondCall_returns409() {
+    // Seed twice → second returns 409
+}
+
+@Test
+void adminMetrics_afterStoresAndRecommendations_returnsCorrectData() {
+    // Create 2 stores, make 5 recommendations
+    // GET /api/admin/v1/metrics (admin JWT)
+    // Assert totalStores>=2, totalRecommendations>=5
+}
+
+@Test
+void adminStores_list_returnsAllStores() {
+    // Create 3 stores
+    // GET /api/admin/v1/stores
+    // Assert all 3 present
+}
+
+@Test
+void adminDeactivateStore_widgetReturns401() {
+    // Create store, setup product + size chart
+    // PATCH /api/admin/v1/stores/{id}/status { status: INACTIVE }
+    // Widget call → assert 401
+}
+
+@Test
+void adminReactivateStore_widgetWorksAgain() {
+    // Deactivate then reactivate
+    // Widget call → assert 200
+}
+
+@Test
+void adminOverridePlan_changesPlanDirectly() {
+    // PATCH /api/admin/v1/stores/{id}/plan { plan: PRO }
+    // GET /api/dashboard/v1/billing/status → assert plan=PRO, productsLimit=50
+}
+
+@Test
+void adminGlobalBrand_createAndUploadSizeChart_availableToAllStores() {
+    // POST /api/admin/v1/brands { name: "Zara Global", slug: "zara-global" }
+    // POST /api/admin/v1/brands/{id}/size-charts/upload (CSV)
+    // From store: list products → assert global brand visible
+}
+
+@Test
+void adminEndpoints_storeJwt_returns403() {
+    // GET /api/admin/v1/metrics with store JWT (not admin)
+    // Assert 403
+}
+```
+
+**Test class: ShopifyWebhookIT** (extends AbstractIntegrationTest)
+
+```java
+@Test
+void shopifyConnect_newStore_createsAccountAndReturnsJwt() {
+    // POST /api/shopify/connect
+    //   Header: X-FitVision-Shopify-Secret
+    //   Body: { shop, accessToken, shopName }
+    // Assert 200, jwt and apiKeyPublic returned
+    // Assert store created with shopify_shop set
+}
+
+@Test
+void shopifyConnect_existingStore_updatesTokenAndReturns200() {
+    // Connect twice with same shop domain
+    // Assert same storeId returned, token updated
+}
+
+@Test
+void shopifyConnect_wrongSecret_returns401() {
+    // POST with wrong X-FitVision-Shopify-Secret → 401
+}
+
+@Test
+void shopifyStatus_connectedStore_returnsConnectedTrue() {
+    // Connect store
+    // GET /api/shopify/status?shop=test.myshopify.com
+    // Assert connected=true, apiKeyPublic present
+}
+
+@Test
+void shopifyStatus_unknownStore_returnsConnectedFalse() {
+    // GET /api/shopify/status?shop=unknown.myshopify.com
+    // Assert connected=false
+}
+
+@Test
+void shopifyConnect_inactiveStore_reactivatesOnReconnect() {
+    // Connect → deactivate via admin → connect again
+    // Assert status=ACTIVE
+}
+```
+
+### CONSTRAINTS
+- StripeService mocked with @MockBean — never call real Stripe in tests
+- Shopify HMAC validation: use test secret configured in application-test.yml
+- Admin seed called in @BeforeEach for admin tests, cleanup in @AfterEach
+- Webhook tests must construct valid Stripe event payloads (use Stripe test fixtures)
+- Test Shopify shared secret: add fitvision.shopify.shared-secret=test-secret to application-test.yml
+
+### EXPECTED OUTPUT
+- BillingFlowIT.java
+- AdminFlowIT.java
+- ShopifyWebhookIT.java
+- src/test/resources/application-test.yml (test-specific overrides)
+- Updated pom.xml if any test dependencies missing
+
+### PHASE T1 COMPLETION CHECKLIST
+- [ ] mvn test runs all tests without errors
+- [ ] Total test count > 120 (was 77)
+- [ ] StoreRegistrationFlowIT: 4 tests passing
+- [ ] ProductFlowIT: 5 tests passing including plan limit 402
+- [ ] SizeChartFlowIT: 5 tests passing
+- [ ] RecommendationFlowIT: 6 tests passing including plan limit fallback
+- [ ] AnalyticsFlowIT: 2 tests passing
+- [ ] BillingFlowIT: 6 tests passing (Stripe mocked)
+- [ ] AdminFlowIT: 9 tests passing
+- [ ] ShopifyWebhookIT: 6 tests passing
+
+---
+
+# FitVision — Phase T2 Prompts: E2E Tests (Playwright)
+
+> Pre-condition: T1 complete. Dashboard running at localhost:3000. Backend running at localhost:8080.
+
+---
+
+## Prompt T2.1 — Playwright Setup + Store Dashboard E2E
+
+### CONTEXT
+FitVision dashboard (Next.js 14). No E2E tests exist. Adding Playwright for browser-based end-to-end testing of the store dashboard and widget.
+
+Playwright runs against the real backend (localhost:8080) and dashboard (localhost:3000). Tests create real data via the API in beforeEach and clean up after.
+
+### OBJECTIVE
+Set up Playwright and implement E2E tests for the store dashboard.
+
+**Setup**
+
+In /dashboard directory:
+```bash
+npm install -D @playwright/test
+npx playwright install chromium
+```
+
+playwright.config.ts:
+```typescript
+import { defineConfig } from '@playwright/test'
+
+export default defineConfig({
+  testDir: './e2e',
+  fullyParallel: false, // sequential to avoid DB conflicts
+  retries: 1,
+  timeout: 30000,
+  use: {
+    baseURL: 'http://localhost:3000',
+    headless: true,
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
+  webServer: [
+    {
+      command: 'npm run dev',
+      url: 'http://localhost:3000',
+      reuseExistingServer: true,
+    }
+  ],
+})
+```
+
+**e2e/helpers/api.ts** — test helper that creates data via API
+```typescript
+// createTestStore(): Promise<{ email, password, jwt, apiKeyPublic }>
+// createTestProduct(jwt, name?): Promise<{ id, externalProductId }>
+// uploadTestSizeChart(jwt, productId): Promise<void>
+// deleteTestStore(jwt): Promise<void>
+// Loads test CSV from e2e/fixtures/size-chart-tops.csv
+```
+
+**e2e/fixtures/** — test data files
+- size-chart-tops.csv (valid CSV for upload tests)
+
+**e2e/auth.spec.ts**
+```typescript
+test('register → login → see dashboard', async ({ page }) => {
+  await page.goto('/register')
+  await page.fill('[name=name]', 'Test Store')
+  await page.fill('[name=email]', uniqueEmail())
+  await page.fill('[name=password]', 'password123')
+  await page.selectOption('[name=platform]', 'shopify')
+  await page.click('button[type=submit]')
+  await expect(page).toHaveURL('/dashboard')
+  await expect(page.locator('text=Total Recommendations')).toBeVisible()
+})
+
+test('login with wrong password → shows error', async ({ page }) => {
+  await page.goto('/login')
+  await page.fill('[name=email]', 'wrong@example.com')
+  await page.fill('[name=password]', 'wrongpass')
+  await page.click('button[type=submit]')
+  await expect(page.locator('text=Invalid')).toBeVisible()
+})
+
+test('logout → redirects to login', async ({ page }) => {
+  // Login first via API, set token in localStorage
+  // Click logout
+  await expect(page).toHaveURL('/login')
+})
+```
+
+**e2e/products.spec.ts**
+```typescript
+test.beforeEach(async ({ page }) => {
+  // Create store via API, set JWT in localStorage, navigate to /products
+})
+
+test('create product → appears in list', async ({ page }) => {
+  await page.click('text=Add product')
+  await page.fill('[name=name]', 'Test T-Shirt')
+  await page.selectOption('[name=category]', 'tops')
+  await page.click('button[type=submit]')
+  await expect(page.locator('text=Test T-Shirt')).toBeVisible()
+})
+
+test('upload size chart CSV → shows active chart', async ({ page }) => {
+  // Create product via API
+  // Click Upload Size Chart
+  // Drop file into dropzone
+  // Assert "Active" badge appears
+})
+
+test('delete product → disappears from list', async ({ page }) => {
+  // Create product via API
+  // Click delete → confirm
+  // Assert product no longer in list
+})
+
+test('product limit reached → shows upgrade alert', async ({ page }) => {
+  // Create 2 products via API (FREE plan limit)
+  // Try to create 3rd via UI
+  // Assert upgrade alert visible
+})
+```
+
+**e2e/settings.spec.ts**
+```typescript
+test('api keys → reveal → copy public key', async ({ page }) => {
+  // Navigate to /settings
+  await expect(page.locator('text=Public key')).toBeVisible()
+  await page.click('text=Reveal')
+  await expect(page.locator('text=Copy secret key')).toBeVisible()
+})
+
+test('regenerate keys → new keys shown', async ({ page }) => {
+  // Get current public key text
+  // Click Regenerate keys → confirm
+  // Assert public key changed
+})
+
+test('billing section → shows FREE plan', async ({ page }) => {
+  await expect(page.locator('text=FREE')).toBeVisible()
+  await expect(page.locator('text=Products')).toBeVisible()
+})
+```
+
+**package.json additions**
+```json
+{
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
+  }
+}
+```
+
+### CONSTRAINTS
+- Tests must be independent — each test creates its own store via API helper
+- Use uniqueEmail() helper to avoid conflicts: `test-${Date.now()}@fitvision-test.io`
+- Never depend on data created by another test
+- Screenshots and videos saved to e2e/results/ (add to .gitignore)
+- Tests run against real backend — backend must be running before E2E tests
+
+### EXPECTED OUTPUT
+- dashboard/playwright.config.ts
+- dashboard/e2e/helpers/api.ts
+- dashboard/e2e/fixtures/size-chart-tops.csv
+- dashboard/e2e/auth.spec.ts
+- dashboard/e2e/products.spec.ts
+- dashboard/e2e/settings.spec.ts
+- Updated dashboard/package.json (playwright scripts)
+- Updated dashboard/.gitignore (e2e/results/)
+
+### NEXT STEP
+Prompt T2.2 adds E2E tests for the admin area and widget.
+
+---
+
+## Prompt T2.2 — Admin E2E + Widget E2E Tests
+
+### CONTEXT
+FitVision. Playwright setup complete. Store dashboard E2E tests passing. Now covering admin area and widget.
+
+Admin tests require an admin account. Create via API before tests using POST /api/admin/seed.
+
+### OBJECTIVE
+E2E tests for admin area and widget behaviour.
+
+**e2e/admin.spec.ts**
+
+```typescript
+test.describe('Admin area', () => {
+  let adminJwt: string
+
+  test.beforeAll(async ({ request }) => {
+    // POST /api/admin/seed (or login if already exists)
+    // Store adminJwt
+  })
+
+  test.beforeEach(async ({ page }) => {
+    // Set adminJwt in localStorage
+    // Navigate to /admin/dashboard
+  })
+
+  test('platform overview → shows metrics cards', async ({ page }) => {
+    await expect(page.locator('text=Total Stores')).toBeVisible()
+    await expect(page.locator('text=Total Recommendations')).toBeVisible()
+    await expect(page.locator('text=Average Confidence')).toBeVisible()
+  })
+
+  test('stores page → list shows registered stores', async ({ page }) => {
+    await page.click('text=Stores')
+    await expect(page).toHaveURL('/admin/stores')
+    await expect(page.locator('table')).toBeVisible()
+  })
+
+  test('deactivate store → status changes to Inactive', async ({ page }) => {
+    // Create test store via API
+    // Navigate to stores page
+    // Find store row → click Deactivate → confirm
+    // Assert status badge shows Inactive
+  })
+
+  test('global brands → create brand', async ({ page }) => {
+    await page.click('text=Global Brands')
+    await page.click('text=Add Brand')
+    await page.fill('[name=name]', `TestBrand-${Date.now()}`)
+    await page.click('button[type=submit]')
+    await expect(page.locator('text=TestBrand')).toBeVisible()
+  })
+
+  test('system health → shows DB status', async ({ page }) => {
+    await page.click('text=System Health')
+    await expect(page).toHaveURL('/admin/health')
+    await expect(page.locator('text=Database')).toBeVisible()
+    await expect(page.locator('text=UP')).toBeVisible()
+  })
+
+  test('store role → cannot access admin area', async ({ page }) => {
+    // Login as store user
+    // Navigate to /admin/dashboard
+    // Assert redirected to /login
+  })
+})
+```
+
+**e2e/widget.spec.ts**
+
+Widget tests load a minimal HTML page that embeds the FitVision widget.
+
+```typescript
+test.beforeEach(async ({ page }) => {
+  // Create store + product + size chart via API
+  // Serve a minimal HTML page with widget embedded
+  // page.route() to intercept and serve local widget file
+})
+
+test('widget loads → trigger button visible', async ({ page }) => {
+  await page.goto('/e2e-widget-test.html')
+  await expect(page.locator('[data-fitvision]')).toBeVisible()
+  // Or check for the trigger button text
+  await expect(page.locator('text=Find my size')).toBeVisible()
+})
+
+test('widget → fill form → shows recommendation', async ({ page }) => {
+  await page.goto('/e2e-widget-test.html')
+  await page.click('text=Find my size')
+  await page.fill('[name=height]', '175')
+  await page.fill('[name=weight]', '75')
+  await page.selectOption('[name=gender]', 'MALE')
+  await page.click('button[type=submit]')
+  // Assert recommendation shown
+  await expect(page.locator('.fv-result')).toBeVisible()
+  await expect(page.locator('text=Recommended size')).toBeVisible()
+})
+
+test('widget → no size chart → shows fallback message', async ({ page }) => {
+  // Product without size chart
+  await page.goto('/e2e-widget-test-no-chart.html')
+  await page.click('text=Find my size')
+  await page.fill('[name=height]', '175')
+  await page.fill('[name=weight]', '75')
+  await page.selectOption('[name=gender]', 'MALE')
+  await page.click('button[type=submit]')
+  await expect(page.locator('text=size guide not available')).toBeVisible()
+})
+
+test('widget → invalid api key → shows error', async ({ page }) => {
+  // Widget with wrong api key
+  await expect(page.locator('text=could not connect')).toBeVisible()
+})
+```
+
+**e2e/widget-test-pages/** — static HTML fixtures for widget tests
+- e2e-widget-test.html: page with valid widget embed
+- e2e-widget-test-no-chart.html: page with product that has no size chart
+- e2e-widget-test-invalid-key.html: page with wrong API key
+
+### PHASE T2 COMPLETION CHECKLIST
+- [ ] npx playwright test runs without errors
+- [ ] auth.spec.ts: 3 tests passing
+- [ ] products.spec.ts: 4 tests passing including plan limit
+- [ ] settings.spec.ts: 3 tests passing
+- [ ] admin.spec.ts: 6 tests passing
+- [ ] widget.spec.ts: 4 tests passing
+- [ ] Screenshots saved on failure in e2e/results/
+- [ ] CI workflow updated: npm run test:e2e runs after build
+
+---
+
+# FitVision — Phase T3 Prompts: Smoke Tests (Production)
+
+> Pre-condition: T1 and T2 complete. Production deployment live at api.fitvision.io and app.fitvision.io.
+
+---
+
+## Prompt T3.1 — Production Smoke Test Script
+
+### CONTEXT
+FitVision. All features complete and deployed. Need an automated smoke test that runs after every production deployment to verify the critical paths are working.
+
+Smoke tests are NOT unit tests or E2E tests. They are fast, read-only checks that confirm the production environment is alive and responding correctly.
+
+### OBJECTIVE
+Create a smoke test script that runs in CI after every production deploy.
+
+**scripts/smoke-test.sh**
+
+```bash
+#!/bin/bash
+# FitVision Production Smoke Test
+# Usage: ./scripts/smoke-test.sh https://api.fitvision.io
+# Exit 0: all checks passed
+# Exit 1: one or more checks failed
+
+BASE_URL=${1:-https://api.fitvision.io}
+DASHBOARD_URL=${2:-https://app.fitvision.io}
+WIDGET_CDN=${3:-https://cdn.fitvision.io/widget/fitvision-widget.min.js}
+
+PASS=0
+FAIL=0
+
+check() {
+  local name=$1
+  local result=$2
+  local expected=$3
+  if echo "$result" | grep -q "$expected"; then
+    echo "✅ $name"
+    PASS=$((PASS + 1))
+  else
+    echo "❌ $name (expected: $expected, got: $result)"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+echo "=== FitVision Smoke Test ==="
+echo "Backend: $BASE_URL"
+echo "Dashboard: $DASHBOARD_URL"
+echo ""
+
+# 1. Backend health
+HEALTH=$(curl -sf "$BASE_URL/actuator/health" | jq -r '.status' 2>/dev/null)
+check "Backend health" "$HEALTH" "UP"
+
+# 2. Widget CDN
+WIDGET_STATUS=$(curl -o /dev/null -sw "%{http_code}" "$WIDGET_CDN")
+check "Widget CDN accessible" "$WIDGET_STATUS" "200"
+
+# 3. Auth endpoint responds
+AUTH_STATUS=$(curl -o /dev/null -sw "%{http_code}" -X POST "$BASE_URL/api/dashboard/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"smoke@test.com","password":"wrong"}')
+check "Auth endpoint responds" "$AUTH_STATUS" "401"
+
+# 4. Widget API CORS headers present
+CORS=$(curl -sf -I -X OPTIONS "$BASE_URL/api/widget/v1/size-recommendation" \
+  -H "Origin: https://test.myshopify.com" | grep -i "access-control-allow-origin")
+check "Widget CORS headers" "$CORS" "access-control"
+
+# 5. Swagger accessible
+SWAGGER_STATUS=$(curl -o /dev/null -sw "%{http_code}" "$BASE_URL/swagger-ui.html")
+check "Swagger accessible" "$SWAGGER_STATUS" "200"
+
+# 6. Admin seed endpoint responds (should be 409 — admin exists)
+SEED_STATUS=$(curl -o /dev/null -sw "%{http_code}" -X POST "$BASE_URL/api/admin/seed" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"smoke@test.com","password":"test","name":"Smoke"}')
+check "Admin seed returns 409 (admin exists)" "$SEED_STATUS" "409"
+
+# 7. Dashboard loads (HTML response)
+DASHBOARD_STATUS=$(curl -o /dev/null -sw "%{http_code}" "$DASHBOARD_URL/login")
+check "Dashboard login page" "$DASHBOARD_STATUS" "200"
+
+echo ""
+echo "=== Results: $PASS passed, $FAIL failed ==="
+
+if [ $FAIL -gt 0 ]; then
+  exit 1
+fi
+exit 0
+```
+
+**GitHub Actions — smoke test job** (add to backend.yml and dashboard.yml)
+
+```yaml
+smoke-test:
+  needs: deploy
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Wait for deployment
+      run: sleep 30
+    - name: Run smoke tests
+      run: |
+        chmod +x scripts/smoke-test.sh
+        ./scripts/smoke-test.sh \
+          https://api.fitvision.io \
+          https://app.fitvision.io \
+          https://cdn.fitvision.io/widget/fitvision-widget.min.js
+```
+
+**scripts/smoke-test-local.sh** — same checks but against localhost
+
+```bash
+#!/bin/bash
+# Local smoke test — verifies dev environment is running correctly
+./scripts/smoke-test.sh \
+  http://localhost:8080 \
+  http://localhost:3000 \
+  http://localhost:5173/fitvision-widget.min.js
+```
+
+### CONSTRAINTS
+- Smoke tests must be read-only — never create or modify data in production
+- Must complete in under 60 seconds
+- Exit code 1 on any failure — CI fails and alerts the team
+- jq required for JSON parsing (add to CI runner install step if missing)
+- Never include real credentials in the script
+
+### EXPECTED OUTPUT
+- scripts/smoke-test.sh
+- scripts/smoke-test-local.sh
+- Updated .github/workflows/backend.yml (smoke-test job)
+- Updated .github/workflows/dashboard.yml (smoke-test job)
+
+### PHASE T3 COMPLETION CHECKLIST
+- [ ] ./scripts/smoke-test.sh https://api.fitvision.io exits 0
+- [ ] All 7 checks pass against production
+- [ ] smoke-test-local.sh exits 0 against localhost
+- [ ] GitHub Actions smoke test job runs after every deploy to main
+- [ ] CI fails and shows which check failed when a service is down
