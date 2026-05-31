@@ -6,6 +6,7 @@ import com.fitvision.domain.recommendation.Gender;
 import com.fitvision.domain.recommendation.RecommendationRequest;
 import com.fitvision.domain.sizechart.SizeChart;
 import com.fitvision.domain.sizechart.SizeEntry;
+import com.fitvision.domain.billing.PlanLimitsService;
 import com.fitvision.infrastructure.persistence.BrandRepository;
 import com.fitvision.infrastructure.persistence.ProductRepository;
 import com.fitvision.infrastructure.persistence.RecommendationRequestRepository;
@@ -52,6 +53,7 @@ public class RecommendationEngine {
     private final SizeEntryRepository sizeEntryRepository;
     private final RecommendationRequestRepository recommendationRequestRepository;
     private final BrandRepository brandRepository;
+    private final PlanLimitsService planLimitsService;
 
     public RecommendationEngine(BodyProfileCalculator bodyProfileCalculator,
                                 SizeChartMatcher sizeChartMatcher,
@@ -59,7 +61,8 @@ public class RecommendationEngine {
                                 SizeChartRepository sizeChartRepository,
                                 SizeEntryRepository sizeEntryRepository,
                                 RecommendationRequestRepository recommendationRequestRepository,
-                                BrandRepository brandRepository) {
+                                BrandRepository brandRepository,
+                                PlanLimitsService planLimitsService) {
         this.bodyProfileCalculator = bodyProfileCalculator;
         this.sizeChartMatcher = sizeChartMatcher;
         this.productRepository = productRepository;
@@ -67,6 +70,7 @@ public class RecommendationEngine {
         this.sizeEntryRepository = sizeEntryRepository;
         this.recommendationRequestRepository = recommendationRequestRepository;
         this.brandRepository = brandRepository;
+        this.planLimitsService = planLimitsService;
     }
 
     /**
@@ -82,6 +86,9 @@ public class RecommendationEngine {
      */
     @Transactional
     public RecommendationOutput recommend(RecommendationInput input) {
+        // Check recommendation limit before processing (fails fast on 402).
+        planLimitsService.checkRecommendationLimit(input.getTenantId());
+
         Gender gender = input.getGender() != null ? input.getGender() : Gender.UNISEX;
 
         // Step 1: Validate inputs and compute BodyProfile.
@@ -137,6 +144,9 @@ public class RecommendationEngine {
 
         // Step 6: Persist analytics record (GDPR-aware).
         persistAnalytics(input, product, gender, matchResult);
+
+        // Increment monthly counter after successful recommendation.
+        planLimitsService.incrementRecommendationCount(input.getTenantId());
 
         log.info("Recommendation: tenantId={}, productId={}, recommendedSize={}, confidenceScore={}, quality={}",
                 input.getTenantId(), product.getId(),

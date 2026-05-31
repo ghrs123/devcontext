@@ -143,6 +143,13 @@
             <version>1.49.0</version>
         </dependency>
 
+        <!-- Stripe billing -->
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>24.3.0</version>
+        </dependency>
+
         <!-- Testcontainers (version managed by Spring Boot BOM) -->
         <dependency>
             <groupId>org.testcontainers</groupId>

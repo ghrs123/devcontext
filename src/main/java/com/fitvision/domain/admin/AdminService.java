@@ -20,6 +20,8 @@ import com.fitvision.infrastructure.persistence.ProductRepository;
 import com.fitvision.infrastructure.persistence.RecommendationRequestRepository;
 import com.fitvision.infrastructure.persistence.SizeChartRepository;
 import com.fitvision.infrastructure.persistence.StoreRepository;
+import com.fitvision.domain.scraping.ScrapeJobStatus;
+import com.fitvision.integration.scraper.AsyncScraperExecutor;
 import com.fitvision.integration.scraper.ScraperService;
 import com.fitvision.shared.exception.ErrorCode;
 import com.fitvision.shared.exception.FitVisionException;
@@ -55,6 +57,7 @@ public class AdminService {
     private final SizeChartRepository sizeChartRepository;
     private final SizeChartService sizeChartService;
     private final ScraperService scraperService;
+    private final AsyncScraperExecutor asyncScraperExecutor;
 
     public AdminService(StoreRepository storeRepository,
                         ProductRepository productRepository,
@@ -62,7 +65,8 @@ public class AdminService {
                         RecommendationRequestRepository recommendationRequestRepository,
                         SizeChartRepository sizeChartRepository,
                         SizeChartService sizeChartService,
-                        ScraperService scraperService) {
+                        ScraperService scraperService,
+                        AsyncScraperExecutor asyncScraperExecutor) {
         this.storeRepository = storeRepository;
         this.productRepository = productRepository;
         this.brandRepository = brandRepository;
@@ -70,6 +74,7 @@ public class AdminService {
         this.sizeChartRepository = sizeChartRepository;
         this.sizeChartService = sizeChartService;
         this.scraperService = scraperService;
+        this.asyncScraperExecutor = asyncScraperExecutor;
     }
 
     public AdminMetricsResponse getMetrics() {
@@ -259,26 +264,44 @@ public class AdminService {
         log.info("Admin action: deactivate-global-brand-size-chart adminStoreId={} brandId={}", adminStoreId, brandId);
     }
 
-    @Transactional
     public ScrapeJobResponse triggerBrandScrape(UUID brandId, UUID adminStoreId) {
-        ScrapeJob job = scraperService.triggerNow(brandId, adminStoreId);
-        log.info("Admin action: trigger-brand-scrape adminStoreId={} brandId={} jobId={} status={}",
-                adminStoreId, brandId, job.getId(), job.getStatus());
-        return ScrapeJobResponse.from(job);
+        ScrapeJob pendingJob = scraperService.createPendingJobRecord(brandId);
+        asyncScraperExecutor.execute(brandId, adminStoreId, scraperService);
+        log.info("Admin action: trigger-brand-scrape adminStoreId={} brandId={} jobId={}",
+                adminStoreId, brandId, pendingJob.getId());
+        Brand brand = brandRepository.findGlobalById(brandId).orElse(null);
+        String brandName = brand != null ? brand.getName() : null;
+        return ScrapeJobResponse.from(pendingJob, brandName, brand != null ? brand.getLastScrapedAt() : null);
     }
 
     public List<ScrapeJobResponse> getBrandScrapeJobs(UUID brandId, UUID adminStoreId) {
-        brandRepository.findGlobalById(brandId)
+        Brand brand = brandRepository.findGlobalById(brandId)
                 .orElseThrow(() -> new FitVisionException(ErrorCode.BRAND_NOT_FOUND, "Global brand not found"));
 
         List<ScrapeJobResponse> jobs = scraperService.listJobs(brandId).stream()
-                .map(ScrapeJobResponse::from)
+                .map(job -> ScrapeJobResponse.from(job, brand.getName(), brand.getLastScrapedAt()))
                 .toList();
 
         log.info("Admin action: list-brand-scrape-jobs adminStoreId={} brandId={} count={}",
                 adminStoreId, brandId, jobs.size());
 
         return jobs;
+    }
+
+    public Page<ScrapeJobResponse> getAllScrapeJobs(String status, Pageable pageable) {
+        Page<ScrapeJob> page;
+        if (status != null && !status.isBlank()) {
+            try {
+                ScrapeJobStatus parsedStatus = ScrapeJobStatus.valueOf(status.trim().toUpperCase());
+                page = scraperService.listJobsByStatus(parsedStatus, pageable);
+            } catch (IllegalArgumentException ex) {
+                throw new FitVisionException(ErrorCode.VALIDATION_ERROR,
+                        "Invalid status. Use PENDING, RUNNING, COMPLETED, or FAILED.");
+            }
+        } else {
+            page = scraperService.listAllJobs(pageable);
+        }
+        return page.map(job -> ScrapeJobResponse.from(job, null, null));
     }
 
     public Page<AdminRecommendationView> getRecommendations(UUID tenantId,
@@ -291,10 +314,25 @@ public class AdminService {
         return page.map(this::toAdminRecommendationView);
     }
 
+    @Transactional
+    public void overridePlan(UUID storeId, String plan, UUID adminStoreId) {
+        String normalized = plan == null ? "" : plan.trim().toUpperCase(Locale.ROOT);
+        if (!java.util.Set.of("FREE", "STARTER", "PRO", "TEAM").contains(normalized)) {
+            throw new FitVisionException(ErrorCode.VALIDATION_ERROR, "Invalid plan. Use FREE, STARTER, PRO, or TEAM.");
+        }
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new FitVisionException(ErrorCode.STORE_NOT_FOUND, "Store not found"));
+        store.setPlan(normalized);
+        storeRepository.save(store);
+        log.info("Admin action: override-plan adminStoreId={} targetStoreId={} plan={}", adminStoreId, storeId, normalized);
+    }
+
     private StoreAdminView toStoreAdminView(Store store) {
         long totalProducts = productRepository.countByTenantIdAndDeletedAtIsNull(store.getId());
         long totalRecommendations = recommendationRequestRepository.countByTenantId(store.getId());
         LocalDateTime lastRecommendationAt = recommendationRequestRepository.findLastRecommendationAtByTenantId(store.getId());
+
+        String maskedCustomerId = maskCustomerId(store.getStripeCustomerId());
 
         return new StoreAdminView(
                 store.getId(),
@@ -307,8 +345,16 @@ public class AdminService {
                 store.getCreatedAt(),
                 totalProducts,
                 totalRecommendations,
-                lastRecommendationAt
+                lastRecommendationAt,
+                store.getSubscriptionStatus(),
+                maskedCustomerId,
+                store.getSubscriptionCurrentPeriodEnd()
         );
+    }
+
+    private String maskCustomerId(String customerId) {
+        if (customerId == null || customerId.length() < 8) return customerId;
+        return customerId.substring(0, 4) + "****" + customerId.substring(customerId.length() - 4);
     }
 
     private BrandRecommendationStat toBrandStat(Object[] row) {

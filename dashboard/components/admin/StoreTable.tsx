@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { api, ApiError } from '@/lib/api';
 import type { AdminRecommendation, SpringPage, StoreAdminView } from '@/lib/types';
 
 type StoreTableProps = {
@@ -10,6 +11,7 @@ type StoreTableProps = {
   loading: boolean;
   onToggleStatus: (store: StoreAdminView) => Promise<void>;
   onPageChange: (next: number) => void;
+  onPlanOverride: (storeId: string, plan: string) => Promise<void>;
   storeRecommendationsById: Record<string, AdminRecommendation[]>;
 };
 
@@ -20,9 +22,20 @@ function statusBadge(status: string) {
   return 'bg-rose-100 text-rose-700';
 }
 
-export function StoreTable({ page, loading, onToggleStatus, onPageChange, storeRecommendationsById }: Readonly<StoreTableProps>) {
+const PLAN_OPTIONS = ['FREE', 'STARTER', 'PRO', 'TEAM'] as const;
+
+const SUB_BADGE: Record<string, string> = {
+  active:   'bg-emerald-100 text-emerald-700',
+  inactive: 'bg-slate-100 text-slate-600',
+  past_due: 'bg-amber-100 text-amber-700',
+  canceled: 'bg-rose-100 text-rose-700',
+};
+
+export function StoreTable({ page, loading, onToggleStatus, onPageChange, onPlanOverride, storeRecommendationsById }: Readonly<StoreTableProps>) {
   const [selectedStore, setSelectedStore] = useState<StoreAdminView | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [overridingPlan, setOverridingPlan] = useState<string | null>(null);
+  const [planOverrideError, setPlanOverrideError] = useState<string | null>(null);
 
   const recommendations = useMemo(() => {
     if (!selectedStore) {
@@ -42,6 +55,19 @@ export function StoreTable({ page, loading, onToggleStatus, onPageChange, storeR
       await onToggleStatus(store);
     } finally {
       setSubmitting(null);
+    }
+  }
+
+  async function handlePlanOverride(storeId: string, plan: string) {
+    setOverridingPlan(plan);
+    setPlanOverrideError(null);
+    try {
+      await onPlanOverride(storeId, plan);
+      setSelectedStore((prev) => prev ? { ...prev, plan } : prev);
+    } catch (err) {
+      setPlanOverrideError(err instanceof ApiError ? err.message : 'Could not override plan.');
+    } finally {
+      setOverridingPlan(null);
     }
   }
 
@@ -145,13 +171,58 @@ export function StoreTable({ page, loading, onToggleStatus, onPageChange, storeR
 
             <div className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-2">
               <p className="text-sm"><span className="font-medium">Email:</span> {selectedStore.email}</p>
-              <p className="text-sm"><span className="font-medium">Plan:</span> {selectedStore.plan}</p>
               <p className="text-sm"><span className="font-medium">Status:</span> {selectedStore.status}</p>
               <p className="text-sm"><span className="font-medium">Role:</span> {selectedStore.role}</p>
               <p className="text-sm"><span className="font-medium">Platform:</span> {selectedStore.platform}</p>
               <p className="text-sm"><span className="font-medium">Registered:</span> {new Date(selectedStore.createdAt).toLocaleString()}</p>
               <p className="text-sm"><span className="font-medium">Products:</span> {selectedStore.totalProducts.toLocaleString()}</p>
               <p className="text-sm"><span className="font-medium">Recommendations:</span> {selectedStore.totalRecommendations.toLocaleString()}</p>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-border bg-card p-4 space-y-3">
+              <h3 className="text-base font-semibold">Billing</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <p><span className="font-medium">Plan:</span>
+                  <span className="ml-2 inline-flex rounded-full bg-foreground px-2.5 py-0.5 text-xs font-semibold text-background">
+                    {selectedStore.plan}
+                  </span>
+                </p>
+                <p><span className="font-medium">Subscription:</span>
+                  <span className={`ml-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${SUB_BADGE[selectedStore.subscriptionStatus ?? ''] ?? 'bg-slate-100 text-slate-600'}`}>
+                    {(selectedStore.subscriptionStatus ?? 'inactive').replace('_', ' ')}
+                  </span>
+                </p>
+                {selectedStore.stripeCustomerIdMasked ? (
+                  <p className="col-span-2 font-mono text-xs text-muted-foreground">
+                    Stripe customer: {selectedStore.stripeCustomerIdMasked}
+                  </p>
+                ) : null}
+                {selectedStore.subscriptionCurrentPeriodEnd ? (
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Period ends: {new Date(selectedStore.subscriptionCurrentPeriodEnd).toLocaleDateString()}
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Override plan (no Stripe)</p>
+                <div className="flex flex-wrap gap-2">
+                  {PLAN_OPTIONS.map((plan) => (
+                    <button
+                      key={plan}
+                      type="button"
+                      disabled={overridingPlan !== null || selectedStore.plan === plan}
+                      onClick={() => { void handlePlanOverride(selectedStore.id, plan); }}
+                      className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors
+                        ${selectedStore.plan === plan
+                          ? 'border-foreground bg-foreground text-background'
+                          : 'border-border bg-card hover:bg-muted disabled:opacity-50'}`}
+                    >
+                      {overridingPlan === plan ? 'Saving...' : plan}
+                    </button>
+                  ))}
+                </div>
+                {planOverrideError ? <p className="text-xs text-rose-600">{planOverrideError}</p> : null}
+              </div>
             </div>
 
             <div className="mt-5 space-y-2">

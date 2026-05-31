@@ -1,5 +1,6 @@
 package com.fitvision.api.widget;
 
+import com.fitvision.domain.billing.PlanLimitException;
 import com.fitvision.domain.recommendation.Gender;
 import com.fitvision.engine.recommendation.RecommendationEngine;
 import com.fitvision.engine.recommendation.RecommendationInput;
@@ -64,7 +65,13 @@ public class WidgetRecommendationController {
                 .storeBodyData(request.isStoreBodyData())
                 .build();
 
-        RecommendationOutput output = recommendationEngine.recommend(input);
+        RecommendationOutput output;
+        try {
+            output = recommendationEngine.recommend(input);
+        } catch (PlanLimitException ex) {
+            // Buyer-facing: never expose billing details — return graceful fallback.
+            return ResponseEntity.ok(ApiResponse.ok(SizeRecommendationResponse.planLimitFallback()));
+        }
 
         SizeRecommendationResponse response = SizeRecommendationResponse.from(output);
 

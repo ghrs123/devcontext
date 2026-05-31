@@ -21,7 +21,7 @@ export default function AdminBrandsPage() {
         <p className="mt-1 text-sm text-muted-foreground">Create and maintain platform-wide brand and size chart data.</p>
       </div>
 
-      <GlobalBrandManager brands={data || []} loading={isLoading} onRefresh={async () => mutate()} />
+      <GlobalBrandManager brands={data || []} loading={isLoading} onRefresh={async () => { await mutate(); }} />
     </main>
   );
 }

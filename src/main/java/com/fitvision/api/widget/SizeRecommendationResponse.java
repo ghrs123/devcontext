@@ -60,6 +60,18 @@ public class SizeRecommendationResponse {
                 .build();
     }
 
+    public static SizeRecommendationResponse planLimitFallback() {
+        return new Builder()
+                .recommendedSize(null)
+                .confidenceScore(0.0)
+                .quality(MatchResult.MatchQuality.NO_MATCH.name())
+                .productName(null)
+                .hasSizeChart(false)
+                .confidenceLabel("Low")
+                .message("Size recommendations are temporarily unavailable for this store.")
+                .build();
+    }
+
     private static String computeConfidenceLabel(double score) {
         if (score >= 0.8) return "High";
         if (score >= 0.5) return "Medium";

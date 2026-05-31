@@ -8,6 +8,7 @@ import com.fitvision.shared.response.ApiResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -21,6 +22,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -46,16 +48,25 @@ public class SecurityConfig {
         private static final String OPTIONS = "OPTIONS";
         private static final String CONTENT_TYPE = "Content-Type";
 
+    private static final List<String> PRODUCTION_CORS_ORIGINS = List.of(
+            "https://app.fitvision.io",
+            "https://fitvision.io",
+            "https://*.myshopify.com"
+    );
+
     private final ApiKeyAuthFilter apiKeyAuthFilter;
         private final JwtAuthFilter jwtAuthFilter;
         private final AdminAuthFilter adminAuthFilter;
+        private final Environment environment;
 
     public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter,
                                                   JwtAuthFilter jwtAuthFilter,
-                                                  AdminAuthFilter adminAuthFilter) {
+                                                  AdminAuthFilter adminAuthFilter,
+                                                  Environment environment) {
         this.apiKeyAuthFilter = apiKeyAuthFilter;
                 this.jwtAuthFilter = jwtAuthFilter;
                 this.adminAuthFilter = adminAuthFilter;
+                this.environment = environment;
     }
 
     @Bean
@@ -70,6 +81,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/api/admin/seed").permitAll()
                         .requestMatchers("/api/shopify/**").permitAll()
+                        .requestMatchers("/api/billing/webhooks").permitAll()
                         .requestMatchers("/api/dashboard/v1/auth/**").permitAll()
                         .requestMatchers("/api/admin/**").authenticated()
                         .requestMatchers("/api/dashboard/**").authenticated()
@@ -112,6 +124,10 @@ public class SecurityConfig {
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        boolean production = Arrays.stream(environment.getActiveProfiles())
+                .anyMatch("prod"::equals);
+        List<String> restrictedOrigins = production ? PRODUCTION_CORS_ORIGINS : List.of("*");
+
         CorsConfiguration widgetCors = new CorsConfiguration();
         widgetCors.setAllowedOriginPatterns(List.of("*"));
         widgetCors.setAllowedMethods(List.of("POST", OPTIONS));
@@ -119,19 +135,19 @@ public class SecurityConfig {
         widgetCors.setMaxAge(3600L);
 
         CorsConfiguration dashboardCors = new CorsConfiguration();
-        dashboardCors.setAllowedOriginPatterns(List.of("*"));
+        dashboardCors.setAllowedOriginPatterns(restrictedOrigins);
         dashboardCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", OPTIONS));
         dashboardCors.setAllowedHeaders(List.of("Authorization", CONTENT_TYPE));
         dashboardCors.setMaxAge(3600L);
 
         CorsConfiguration adminCors = new CorsConfiguration();
-        adminCors.setAllowedOriginPatterns(List.of("*"));
+        adminCors.setAllowedOriginPatterns(restrictedOrigins);
         adminCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", OPTIONS));
         adminCors.setAllowedHeaders(List.of("Authorization", CONTENT_TYPE));
         adminCors.setMaxAge(3600L);
 
         CorsConfiguration shopifyCors = new CorsConfiguration();
-        shopifyCors.setAllowedOriginPatterns(List.of("*"));
+        shopifyCors.setAllowedOriginPatterns(restrictedOrigins);
         shopifyCors.setAllowedMethods(List.of("GET", "POST", OPTIONS));
         shopifyCors.setAllowedHeaders(List.of("X-FitVision-Shopify-Secret", CONTENT_TYPE));
         shopifyCors.setMaxAge(3600L);

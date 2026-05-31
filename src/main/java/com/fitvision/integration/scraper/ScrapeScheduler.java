@@ -16,14 +16,13 @@ public class ScrapeScheduler {
         this.scraperService = scraperService;
     }
 
-    @Scheduled(cron = "0 0 2 * * *")
-    public void runNightlyGlobalBrandScrapes() {
+    @Scheduled(cron = "0 0 2 * * MON")
+    public void runWeeklyGlobalBrandScrapes() {
         ScrapeBatchReport report = scraperService.runScheduledScrapes();
-        log.info("Nightly scrape batch finished: totalBrands={} completed={} failed={} failureRate={} entries={} pages={} durationMs={}",
+        log.info("Weekly scrape batch finished: totalBrands={} completed={} failed={} entries={} pages={} durationMs={}",
                 report.totalBrands(),
                 report.completedJobs(),
                 report.failedJobs(),
-                String.format("%.2f", report.failureRate()),
                 report.totalEntriesFound(),
                 report.totalPagesScraped(),
                 report.durationMs());

@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+
+import { BillingSection } from '@/components/dashboard/BillingSection';
 import { Eye, EyeOff, Loader2, RefreshCcw } from 'lucide-react';
 
 import { CodeBlock } from '@/components/app/CodeBlock';
@@ -32,6 +35,7 @@ const PLATFORM_OPTIONS = [
 ];
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState<StoreProfile | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKeys | null>(null);
   const [name, setName] = useState('');
@@ -40,6 +44,12 @@ export default function SettingsPage() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('billing') === 'success') {
+      toast({ title: 'Plan upgraded', description: 'Your subscription is now active.' });
+    }
+  }, [searchParams]);
 
   async function loadSettings() {
     setIsLoading(true);
@@ -224,6 +234,8 @@ export default function SettingsPage() {
             </AlertDialog>
           </CardContent>
         </Card>
+
+        <BillingSection />
 
         <Card>
           <CardHeader>

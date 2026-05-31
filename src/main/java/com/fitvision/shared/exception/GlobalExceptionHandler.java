@@ -1,5 +1,6 @@
 package com.fitvision.shared.exception;
 
+import com.fitvision.domain.billing.PlanLimitException;
 import com.fitvision.shared.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -15,6 +16,13 @@ import org.springframework.web.multipart.MultipartException;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(PlanLimitException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePlanLimitException(PlanLimitException ex) {
+        log.warn("Plan limit reached [requestId={}]: {}", MDC.get("requestId"), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
+                .body(ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
+    }
 
     @ExceptionHandler(FitVisionException.class)
     public ResponseEntity<ApiResponse<Void>> handleFitVisionException(FitVisionException ex) {
@@ -65,6 +73,8 @@ public class GlobalExceptionHandler {
             case STORE_ALREADY_EXISTS, ADMIN_ALREADY_EXISTS -> HttpStatus.CONFLICT;
             case INVALID_BODY_MEASUREMENTS, VALIDATION_ERROR,
                  UNSUPPORTED_FILE_FORMAT, SIZE_CHART_PARSE_ERROR -> HttpStatus.BAD_REQUEST;
+            case PLAN_LIMIT_REACHED -> HttpStatus.PAYMENT_REQUIRED;
+            case STRIPE_ERROR -> HttpStatus.BAD_GATEWAY;
             default -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }

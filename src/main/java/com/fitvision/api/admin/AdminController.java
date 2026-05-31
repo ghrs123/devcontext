@@ -83,6 +83,15 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.ok(updated));
     }
 
+    @PatchMapping("/stores/{storeId}/plan")
+    public ResponseEntity<ApiResponse<Void>> overrideStorePlan(@PathVariable UUID storeId,
+                                                               @RequestBody java.util.Map<String, String> body) {
+        UUID adminStoreId = requireAdminStoreId();
+        String plan = body.getOrDefault("plan", "");
+        adminService.overridePlan(storeId, plan, adminStoreId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     @GetMapping("/brands")
     public ResponseEntity<ApiResponse<List<BrandResponse>>> getBrands() {
         return ResponseEntity.ok(ApiResponse.ok(adminService.getBrands()));
@@ -154,6 +163,16 @@ public class AdminController {
     public ResponseEntity<ApiResponse<List<ScrapeJobResponse>>> getBrandScrapeJobs(@PathVariable UUID brandId) {
         UUID adminStoreId = requireAdminStoreId();
         List<ScrapeJobResponse> jobs = adminService.getBrandScrapeJobs(brandId, adminStoreId);
+        return ResponseEntity.ok(ApiResponse.ok(jobs));
+    }
+
+    @GetMapping("/scrape-jobs")
+    public ResponseEntity<ApiResponse<Page<ScrapeJobResponse>>> getAllScrapeJobs(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.max(size, 1));
+        Page<ScrapeJobResponse> jobs = adminService.getAllScrapeJobs(status, pageable);
         return ResponseEntity.ok(ApiResponse.ok(jobs));
     }
 

@@ -7,11 +7,13 @@ import type {
   ApiEnvelope,
   ApiKeys,
   AuthResponse,
+  BillingStatusResponse,
   Brand,
   GlobalBrandSizeChartVersion,
   LoginRequest,
   Product,
   ProductRequest,
+  ScrapeJobResponse,
   SpringPage,
   StoreAdminView,
   RegisterRequest,
@@ -340,5 +342,49 @@ export const api = {
     }
 
     return request<SpringPage<AdminRecommendation>>(`/api/admin/v1/recommendations?${params.toString()}`);
+  },
+
+  adminTriggerScrape(brandId: string): Promise<ScrapeJobResponse> {
+    return request<ScrapeJobResponse>(`/api/admin/v1/brands/${brandId}/scrape`, {
+      method: 'POST'
+    });
+  },
+
+  adminGetScrapeJobs(brandId: string): Promise<ScrapeJobResponse[]> {
+    return request<ScrapeJobResponse[]>(`/api/admin/v1/brands/${brandId}/scrape-jobs`);
+  },
+
+  adminGetScrapeJob(brandId: string, jobId: string): Promise<ScrapeJobResponse> {
+    return request<ScrapeJobResponse>(`/api/admin/v1/brands/${brandId}/scrape-jobs/${jobId}`);
+  },
+
+  adminGetAllScrapeJobs(status?: string, page = 0, size = 20): Promise<SpringPage<ScrapeJobResponse>> {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (status) params.set('status', status);
+    return request<SpringPage<ScrapeJobResponse>>(`/api/admin/v1/scrape-jobs?${params.toString()}`);
+  },
+
+  async adminOverrideStorePlan(storeId: string, plan: string): Promise<void> {
+    await request<null>(`/api/admin/v1/stores/${storeId}/plan`, {
+      method: 'PATCH',
+      body: JSON.stringify({ plan })
+    });
+  },
+
+  getBillingStatus(): Promise<BillingStatusResponse> {
+    return request<BillingStatusResponse>('/api/dashboard/v1/billing/status');
+  },
+
+  createCheckoutSession(plan: string): Promise<{ checkoutUrl: string }> {
+    return request<{ checkoutUrl: string }>('/api/dashboard/v1/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ plan })
+    });
+  },
+
+  createPortalSession(): Promise<{ portalUrl: string }> {
+    return request<{ portalUrl: string }>('/api/dashboard/v1/billing/portal', {
+      method: 'POST'
+    });
   }
 };

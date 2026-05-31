@@ -2,6 +2,7 @@ package com.fitvision.domain.product;
 
 import com.fitvision.api.dashboard.product.ProductRequest;
 import com.fitvision.api.dashboard.product.ProductResponse;
+import com.fitvision.domain.billing.PlanLimitsService;
 import com.fitvision.domain.brand.Brand;
 import com.fitvision.domain.sizechart.SizeChartService;
 import com.fitvision.infrastructure.persistence.BrandRepository;
@@ -31,15 +32,18 @@ public class ProductService {
     private final BrandRepository brandRepository;
     private final SizeChartRepository sizeChartRepository;
     private final SizeChartService sizeChartService;
+    private final PlanLimitsService planLimitsService;
 
     public ProductService(ProductRepository productRepository,
                           BrandRepository brandRepository,
                           SizeChartRepository sizeChartRepository,
-                          SizeChartService sizeChartService) {
+                          SizeChartService sizeChartService,
+                          PlanLimitsService planLimitsService) {
         this.productRepository = productRepository;
         this.brandRepository = brandRepository;
         this.sizeChartRepository = sizeChartRepository;
         this.sizeChartService = sizeChartService;
+        this.planLimitsService = planLimitsService;
     }
 
     public List<ProductResponse> listProducts(UUID tenantId) {
@@ -70,6 +74,8 @@ public class ProductService {
 
     @Transactional
     public ProductResponse createProduct(UUID tenantId, ProductRequest request) {
+        planLimitsService.checkProductLimit(tenantId);
+
         String externalProductId = request.getExternalProductId().trim();
         productRepository.findByExternalProductIdAndTenantId(externalProductId, tenantId)
                 .ifPresent(existing -> {

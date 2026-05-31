@@ -61,6 +61,24 @@ public class Store {
     @Column(name = "shopify_access_token_encrypted", columnDefinition = "TEXT")
     private String shopifyAccessTokenEncrypted;
 
+    @Column(name = "stripe_customer_id", unique = true)
+    private String stripeCustomerId;
+
+    @Column(name = "stripe_subscription_id", unique = true)
+    private String stripeSubscriptionId;
+
+    @Column(name = "stripe_price_id")
+    private String stripePriceId;
+
+    @Column(name = "subscription_current_period_end")
+    private java.time.LocalDateTime subscriptionCurrentPeriodEnd;
+
+    @Column(name = "recommendations_count_current_month")
+    private Integer recommendationsCountCurrentMonth;
+
+    @Column(name = "recommendations_count_reset_at")
+    private java.time.LocalDateTime recommendationsCountResetAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

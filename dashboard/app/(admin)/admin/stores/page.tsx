@@ -62,6 +62,11 @@ export default function AdminStoresPage() {
     }
   }, [data?.content]);
 
+  async function handleOverridePlan(storeId: string, plan: string) {
+    await api.adminOverrideStorePlan(storeId, plan);
+    await mutate();
+  }
+
   async function handleToggleStatus(store: StoreAdminView) {
     const nextStatus = store.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
 
@@ -113,6 +118,7 @@ export default function AdminStoresPage() {
         page={data || EMPTY_PAGE}
         loading={isLoading}
         onToggleStatus={handleToggleStatus}
+        onPlanOverride={handleOverridePlan}
         onPageChange={(next) => setPage(Math.max(next, 0))}
         storeRecommendationsById={storeRecommendationsById}
       />

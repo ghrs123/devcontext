@@ -37,6 +37,7 @@ export default function ProductsPage() {
   const [createBrandLoading, setCreateBrandLoading] = useState(false);
   const [createBrandError, setCreateBrandError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPlanLimitError, setIsPlanLimitError] = useState(false);
 
   const {
     data: products,
@@ -144,6 +145,7 @@ export default function ProductsPage() {
   async function handleSaveProduct(payload: ProductRequest) {
     try {
       setError(null);
+      setIsPlanLimitError(false);
       if (editingProduct) {
         await api.updateProduct(editingProduct.id, payload);
       } else {
@@ -153,8 +155,12 @@ export default function ProductsPage() {
       setFormOpen(false);
       setEditingProduct(null);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Unable to save product.';
-      setError(message);
+      if (err instanceof ApiError && err.status === 402) {
+        setIsPlanLimitError(true);
+        setError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Unable to save product.');
+      }
     }
   }
 
@@ -259,7 +265,16 @@ export default function ProductsPage() {
         />
       </div>
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {error ? (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+          {isPlanLimitError && (
+            <a href="/settings#billing" className="ml-2 font-medium underline">
+              Upgrade your plan →
+            </a>
+          )}
+        </div>
+      ) : null}
 
       <section className="rounded-xl border border-border bg-card">
         <button

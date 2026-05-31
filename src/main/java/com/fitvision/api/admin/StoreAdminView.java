@@ -14,6 +14,9 @@ public record StoreAdminView(
         LocalDateTime createdAt,
         long totalProducts,
         long totalRecommendations,
-        LocalDateTime lastRecommendationAt
+        LocalDateTime lastRecommendationAt,
+        String subscriptionStatus,
+        String stripeCustomerIdMasked,
+        LocalDateTime subscriptionCurrentPeriodEnd
 ) {
 }

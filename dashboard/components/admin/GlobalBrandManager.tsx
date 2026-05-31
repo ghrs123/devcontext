@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { ScrapeHistoryDrawer } from '@/components/admin/ScrapeHistoryDrawer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api';
@@ -39,6 +40,8 @@ export function GlobalBrandManager({ brands, loading, onRefresh }: Readonly<Glob
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
   const [editingBrandName, setEditingBrandName] = useState('');
   const [uploadBrand, setUploadBrand] = useState<Brand | null>(null);
+  const [historyBrand, setHistoryBrand] = useState<Brand | null>(null);
+  const [scrapingBrandId, setScrapingBrandId] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<SizeChartUploadResult | null>(null);
   const [versions, setVersions] = useState<GlobalBrandSizeChartVersion[]>([]);
@@ -180,6 +183,29 @@ export function GlobalBrandManager({ brands, loading, onRefresh }: Readonly<Glob
     }
   }
 
+  async function triggerScrape(brand: Brand) {
+    setScrapingBrandId(brand.id);
+    setError(null);
+    try {
+      await api.adminTriggerScrape(brand.id);
+      await onRefresh();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setError(`Scrape already running for ${brand.name}.`);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Could not trigger scrape.');
+      }
+    } finally {
+      setScrapingBrandId(null);
+    }
+  }
+
+  function isStaleScrape(lastScrapedAt: string | null | undefined): boolean {
+    if (!lastScrapedAt) return true;
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return new Date(lastScrapedAt).getTime() < thirtyDaysAgo;
+  }
+
   return (
     <div className="space-y-4">
       <section className="rounded-xl border border-border bg-card p-4">
@@ -207,18 +233,19 @@ export function GlobalBrandManager({ brands, loading, onRefresh }: Readonly<Glob
               <th className="px-4 py-3 font-medium">Source</th>
               <th className="px-4 py-3 font-medium">Size Chart</th>
               <th className="px-4 py-3 font-medium">Last updated</th>
+              <th className="px-4 py-3 font-medium">Last scraped</th>
               <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-4 py-6 text-muted-foreground" colSpan={6}>Loading global brands...</td>
+                <td className="px-4 py-6 text-muted-foreground" colSpan={7}>Loading global brands...</td>
               </tr>
             ) : null}
             {!loading && globalBrands.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-muted-foreground" colSpan={6}>No global brands yet.</td>
+                <td className="px-4 py-6 text-muted-foreground" colSpan={7}>No global brands yet.</td>
               </tr>
             ) : null}
             {rows.map((brand) => (
@@ -247,6 +274,20 @@ export function GlobalBrandManager({ brands, loading, onRefresh }: Readonly<Glob
                     const lastUpdated = chartMetaByBrand[brand.id]?.lastUpdated;
                     return lastUpdated ? new Date(lastUpdated).toLocaleString() : '-';
                   })()}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {brand.lastScrapedAt ? (
+                      <span className="text-xs tabular-nums">{new Date(brand.lastScrapedAt).toLocaleDateString()}</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Never</span>
+                    )}
+                    {isStaleScrape(brand.lastScrapedAt) ? (
+                      <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        Stale
+                      </span>
+                    ) : null}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
@@ -281,7 +322,19 @@ export function GlobalBrandManager({ brands, loading, onRefresh }: Readonly<Glob
                           Edit name
                         </Button>
                         <Button type="button" size="sm" variant="outline" onClick={() => openUpload(brand)}>
-                          Upload size chart
+                          Upload chart
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => triggerScrape(brand)}
+                          disabled={scrapingBrandId === brand.id}
+                        >
+                          {scrapingBrandId === brand.id ? 'Starting...' : 'Scrape now'}
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setHistoryBrand(brand)}>
+                          History
                         </Button>
                         <Button type="button" size="sm" variant="outline" onClick={() => deleteBrand(brand.id)} disabled={submitting}>
                           Delete
@@ -295,6 +348,14 @@ export function GlobalBrandManager({ brands, loading, onRefresh }: Readonly<Glob
           </tbody>
         </table>
       </div>
+
+      {historyBrand ? (
+        <ScrapeHistoryDrawer
+          brandId={historyBrand.id}
+          brandName={historyBrand.name}
+          onClose={() => setHistoryBrand(null)}
+        />
+      ) : null}
 
       {uploadBrand ? (
         <div className="fixed inset-0 z-50">

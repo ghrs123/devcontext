@@ -42,13 +42,21 @@ management:
         include: health,info
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: never
 
 logging:
   level:
     com.fitvision: DEBUG
     org.springframework.security: INFO
     org.flywaydb: INFO
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+  prices:
+    starter: ${STRIPE_PRICE_STARTER:}
+    pro: ${STRIPE_PRICE_PRO:}
+    team: ${STRIPE_PRICE_TEAM:}
 
 fitvision:
   jwt:

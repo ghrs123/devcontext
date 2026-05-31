@@ -68,6 +68,24 @@ export interface Brand {
   slug: string;
   source: 'store_uploaded' | 'fitvision_managed';
   isGlobal: boolean;
+  lastScrapedAt?: string | null;
+}
+
+export type ScrapeJobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+
+export interface ScrapeJobResponse {
+  id: string;
+  brandId: string;
+  brandName: string | null;
+  status: ScrapeJobStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+  pagesScraped: number | null;
+  entriesFound: number | null;
+  errorMessage: string | null;
+  createdAt: string;
+  durationSeconds: number | null;
+  isStale: boolean;
 }
 
 export interface ProductRequest {
@@ -152,6 +170,9 @@ export interface StoreAdminView {
   totalProducts: number;
   totalRecommendations: number;
   lastRecommendationAt: string | null;
+  subscriptionStatus: string | null;
+  stripeCustomerIdMasked: string | null;
+  subscriptionCurrentPeriodEnd: string | null;
 }
 
 export interface AdminRecommendation {
@@ -178,4 +199,14 @@ export interface AdminRecommendationFilters {
   tenantId?: string;
   productId?: string;
   quality?: string;
+}
+
+export interface BillingStatusResponse {
+  plan: 'FREE' | 'STARTER' | 'PRO' | 'TEAM';
+  subscriptionStatus: 'active' | 'inactive' | 'past_due' | 'canceled' | string;
+  currentPeriodEnd: string | null;
+  productsUsed: number;
+  productsLimit: number;
+  recommendationsUsed: number;
+  recommendationsLimit: number;
 }

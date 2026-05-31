@@ -2,6 +2,7 @@ package com.fitvision.api.dashboard.brand;
 
 import com.fitvision.domain.brand.Brand;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record BrandResponse(
@@ -9,7 +10,8 @@ public record BrandResponse(
         String name,
         String slug,
         String source,
-        boolean isGlobal
+        boolean isGlobal,
+        LocalDateTime lastScrapedAt
 ) {
 
     public static BrandResponse from(Brand brand) {
@@ -18,7 +20,8 @@ public record BrandResponse(
                 brand.getName(),
                 brand.getSlug(),
                 brand.getSource(),
-                brand.getTenantId() == null
+                brand.getTenantId() == null,
+                brand.getLastScrapedAt()
         );
     }
 }

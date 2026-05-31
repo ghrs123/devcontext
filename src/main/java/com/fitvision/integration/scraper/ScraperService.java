@@ -9,6 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -71,8 +73,41 @@ public class ScraperService {
         return executeScrape(brand, adminStoreId);
     }
 
+    /**
+     * Creates a PENDING job record synchronously and returns it immediately.
+     * The caller is responsible for submitting the actual scrape asynchronously.
+     * Throws if a RUNNING job already exists for this brand.
+     */
+    @Transactional
+    public ScrapeJob createPendingJobRecord(UUID brandId) {
+        Brand brand = brandRepository.findGlobalById(brandId)
+                .orElseThrow(() -> new FitVisionException(ErrorCode.BRAND_NOT_FOUND, "Global brand not found"));
+
+        if (scrapeJobRepository.existsByBrandIdAndStatus(brandId, ScrapeJobStatus.RUNNING)) {
+            throw new FitVisionException(ErrorCode.VALIDATION_ERROR,
+                    "A scrape job is already running for brand: " + brand.getSlug());
+        }
+
+        ScrapeJob job = new ScrapeJob();
+        job.setId(UUID.randomUUID());
+        job.setBrandId(brandId);
+        job.setStatus(ScrapeJobStatus.PENDING);
+        job.setCreatedAt(LocalDateTime.now());
+        job.setPagesScraped(0);
+        job.setEntriesFound(0);
+        return scrapeJobRepository.save(job);
+    }
+
     public List<ScrapeJob> listJobs(UUID brandId) {
         return scrapeJobRepository.findAllByBrandIdOrderByCreatedAtDesc(brandId);
+    }
+
+    public Page<ScrapeJob> listJobsByStatus(ScrapeJobStatus status, Pageable pageable) {
+        return scrapeJobRepository.findAllByStatusOrderByCreatedAtDesc(status, pageable);
+    }
+
+    public Page<ScrapeJob> listAllJobs(Pageable pageable) {
+        return scrapeJobRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
     @Transactional

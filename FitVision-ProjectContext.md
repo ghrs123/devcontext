@@ -3246,3 +3246,802 @@ Before moving to Phase 10, verify:
 - [ ] H&M, Pull&Bear, Mango scrapers registered and triggerable via admin
 - [ ] robots.txt check prevents scraping if disallowed (unit test)
 - [ ] Rate limit enforced: 3s between requests (verify in scraper logs)
+
+# FitVision — Phase 10 Prompts: Billing & Subscriptions
+
+> Pre-condition: Phase 9 complete. Admin area operational. Next migration is V9. Stripe account created at dashboard.stripe.com.
+
+---
+
+## Prompt 10.1 — Stripe Integration + Plan Enforcement (Backend)
+
+### CONTEXT
+FitVision backend (Spring Boot 3.x, Java 21). Stores pay a monthly subscription to use FitVision. Plans determine how many products a store can create and how many recommendations per month they can serve.
+
+Plans:
+- FREE: 2 products max, 100 recommendations/month, no export
+- STARTER €29/mo: 10 products, 5000 recommendations/month
+- PRO €79/mo: 50 products, 25000 recommendations/month
+- TEAM €149/mo: unlimited products, unlimited recommendations
+
+Current stores table has a `plan` column (VARCHAR, default 'FREE').
+
+### OBJECTIVE
+Integrate Stripe subscriptions and enforce plan limits on product creation and widget recommendations.
+
+**V9__add_billing_fields.sql**
+```sql
+ALTER TABLE stores
+    ADD COLUMN stripe_customer_id VARCHAR(255) UNIQUE,
+    ADD COLUMN stripe_subscription_id VARCHAR(255) UNIQUE,
+    ADD COLUMN stripe_price_id VARCHAR(255),
+    ADD COLUMN subscription_status VARCHAR(50) DEFAULT 'inactive',
+    ADD COLUMN subscription_current_period_end TIMESTAMP,
+    ADD COLUMN recommendations_count_current_month INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN recommendations_count_reset_at TIMESTAMP;
+
+CREATE INDEX idx_stores_stripe_customer ON stores(stripe_customer_id);
+CREATE INDEX idx_stores_stripe_subscription ON stores(stripe_subscription_id);
+```
+
+**Plan enum** (com.fitvision.domain.billing)
+```java
+public enum Plan {
+    FREE(2, 100),
+    STARTER(10, 5000),
+    PRO(50, 25000),
+    TEAM(Integer.MAX_VALUE, Integer.MAX_VALUE);
+
+    private final int maxProducts;
+    private final int maxRecommendationsPerMonth;
+}
+```
+
+**PlanLimitsService** (@Service)
+```java
+// checkProductLimit(UUID tenantId): throws PlanLimitException if at max products
+// checkRecommendationLimit(UUID tenantId): throws PlanLimitException if at monthly limit
+// incrementRecommendationCount(UUID tenantId): increments counter, resets if new month
+// getPlanForStore(UUID tenantId): returns Plan enum
+```
+
+**PlanLimitException** → mapped to 402 PAYMENT_REQUIRED in GlobalExceptionHandler
+- code: PLAN_LIMIT_REACHED
+- message: human-readable ("You've reached the 2 product limit on the Free plan. Upgrade to add more products.")
+
+**Integration points:**
+- ProductService.createProduct(): call planLimitsService.checkProductLimit() before creating
+- RecommendationEngine: call planLimitsService.checkRecommendationLimit() then incrementRecommendationCount() after successful recommendation
+- Widget API: graceful response when 402 — return hasSizeChart=false with message "Store plan limit reached"
+
+**StripeService** (@Service)
+```java
+// createCustomer(String email, String name): String customerId
+// createSubscription(String customerId, String priceId): Subscription
+// cancelSubscription(String subscriptionId): void
+// getSubscription(String subscriptionId): Subscription
+// createBillingPortalSession(String customerId, String returnUrl): String portalUrl
+```
+
+**Stripe webhook controller** (POST /api/billing/webhooks — no auth, raw body)
+
+Handle these events:
+- customer.subscription.created → set plan, subscription_status=active, stripe IDs
+- customer.subscription.updated → update plan and subscription_status
+- customer.subscription.deleted → set plan=FREE, subscription_status=inactive
+- invoice.payment_failed → set subscription_status=past_due, log warning
+
+Validate Stripe-Signature header on every webhook — reject with 400 if invalid.
+
+**BillingController** (/api/dashboard/v1/billing — JWT auth)
+- GET /status → returns { plan, subscriptionStatus, currentPeriodEnd, productsUsed, productsLimit, recommendationsUsed, recommendationsLimit }
+- POST /checkout → creates Stripe Checkout Session for plan upgrade, returns { checkoutUrl }
+  - Body: { priceId: string }
+- POST /portal → creates Stripe Billing Portal session, returns { portalUrl }
+  - Allows customer to manage/cancel subscription
+
+**pom.xml addition**
+```xml
+<dependency>
+    <groupId>com.stripe</groupId>
+    <artifactId>stripe-java</artifactId>
+    <version>24.3.0</version>
+</dependency>
+```
+
+**application.yml additions**
+```yaml
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+  prices:
+    starter: ${STRIPE_PRICE_STARTER}
+    pro: ${STRIPE_PRICE_PRO}
+    team: ${STRIPE_PRICE_TEAM}
+```
+
+**SecurityConfig update**
+- Add /api/billing/webhooks to permitAll (raw body needed — before JSON parsing)
+- Add /api/dashboard/v1/billing/** to JWT-protected routes
+
+### CONSTRAINTS
+- Stripe webhook validation is mandatory — reject any request without valid signature
+- Plan limits checked BEFORE creating product or serving recommendation — fail fast
+- FREE plan stores are never blocked from using the widget — only limited by count
+- Recommendation counter resets on the 1st of each month (check recommendations_count_reset_at)
+- stripe_customer_id created lazily — only when store first accesses billing
+- TEAM plan: Integer.MAX_VALUE effectively means unlimited — no limit check needed
+- All Stripe API calls wrapped in try-catch — StripeException mapped to 502 BAD_GATEWAY
+
+### EXPECTED OUTPUT
+- V9__add_billing_fields.sql
+- Plan.java (enum)
+- PlanLimitsService.java
+- PlanLimitException.java
+- StripeService.java
+- StripeWebhookController.java
+- BillingController.java
+- BillingStatusResponse.java (DTO)
+- Updated ProductService.java (plan limit check)
+- Updated RecommendationEngine.java (plan limit check + counter increment)
+- Updated GlobalExceptionHandler.java (PlanLimitException → 402)
+- Updated SecurityConfig.java
+- Updated application.yml
+- Updated pom.xml
+
+### NEXT STEP
+Prompt 10.2 builds the billing UI in the store dashboard and admin subscription view.
+
+---
+
+## Prompt 10.2 — Billing UI (Store Dashboard + Admin)
+
+### CONTEXT
+FitVision. Billing backend complete. BillingController returns plan status and creates Checkout/Portal sessions. Stripe Checkout handles payment — store owner is redirected to Stripe-hosted page and back to dashboard after completing.
+
+### OBJECTIVE
+Add billing UI to store dashboard settings and subscription view to admin.
+
+**Store Dashboard — Settings page updates** (app/(dashboard)/settings/page.tsx)
+
+Add new "Plan & Billing" section below API Keys:
+
+Current plan card:
+- Plan name badge (FREE / STARTER / PRO / TEAM)
+- Usage bars: Products used / limit, Recommendations used / limit (current month)
+- Subscription status badge: Active (green) / Past Due (yellow) / Inactive (grey)
+- Current period end date (if active subscription)
+
+Upgrade section (shown when plan < TEAM):
+- Plan comparison table: FREE / STARTER / PRO / TEAM
+  - Columns: Products, Recommendations/month, Price
+- "Upgrade to Starter" / "Upgrade to Pro" / "Upgrade to Team" buttons
+- Click → POST /api/dashboard/v1/billing/checkout → redirect to checkoutUrl
+- After Stripe success redirect back to /settings?billing=success → show success toast
+
+Manage subscription (shown when plan > FREE):
+- "Manage billing" button → POST /api/dashboard/v1/billing/portal → redirect to portalUrl
+- Allows downgrade, cancellation, invoice download
+
+**useBilling hook** (hooks/useBilling.ts)
+```typescript
+// Fetches GET /api/dashboard/v1/billing/status via SWR
+// Returns { plan, subscriptionStatus, productsUsed, productsLimit, recommendationsUsed, recommendationsLimit, currentPeriodEnd }
+// refreshInterval: 60000 (1 min)
+```
+
+**Plan limit feedback in Products page**
+- When POST /products returns 402: show inline alert "Product limit reached — upgrade your plan" with link to Settings → Plan & Billing
+- Do not block the form — show error after submission attempt
+
+**Admin — Stores page update** (admin/stores/page.tsx)
+
+Add columns to stores table:
+- Plan badge (FREE/STARTER/PRO/TEAM)
+- Subscription status badge
+- Products used / limit
+
+Store detail drawer additions:
+- Billing section: plan, subscription status, Stripe customer ID (masked), current period end
+- "Override plan" button → opens modal with plan selector → calls PATCH /api/admin/v1/stores/{id}/plan
+
+**Admin billing endpoint** (AdminController addition)
+```
+PATCH /api/admin/v1/stores/{storeId}/plan
+Body: { plan: "FREE" | "STARTER" | "PRO" | "TEAM" }
+Sets plan directly without Stripe — for manual overrides (support, trials, partners)
+```
+
+**lib/api.ts additions**
+```typescript
+getBillingStatus(): Promise<BillingStatusResponse>
+createCheckoutSession(priceId: string): Promise<{ checkoutUrl: string }>
+createPortalSession(): Promise<{ portalUrl: string }>
+adminOverrideStorePlan(storeId: string, plan: string): Promise<void>
+```
+
+**types.ts additions**
+```typescript
+interface BillingStatusResponse {
+  plan: 'FREE' | 'STARTER' | 'PRO' | 'TEAM'
+  subscriptionStatus: 'active' | 'inactive' | 'past_due' | 'canceled'
+  currentPeriodEnd: string | null
+  productsUsed: number
+  productsLimit: number
+  recommendationsUsed: number
+  recommendationsLimit: number
+}
+```
+
+### CONSTRAINTS
+- Stripe Checkout redirect must open in same tab (not new tab)
+- On return from Stripe (?billing=success), refresh billing status before showing toast
+- Plan comparison table must always be visible — even for TEAM plan (shows current plan highlighted)
+- Admin plan override does not create/modify Stripe subscription — backend sets column directly
+- Usage bars show 100% filled and red when at limit
+
+### EXPECTED OUTPUT
+- Updated app/(dashboard)/settings/page.tsx
+- hooks/useBilling.ts
+- components/dashboard/BillingSection.tsx
+- components/dashboard/PlanComparisonTable.tsx
+- components/dashboard/UsageBar.tsx
+- Updated app/(admin)/admin/stores/page.tsx
+- Updated components/admin/StoreTable.tsx
+- Updated lib/api.ts
+- Updated types.ts
+- Updated AdminController.java (plan override endpoint)
+
+### PHASE 10 COMPLETION CHECKLIST
+- [ ] V9 migration runs on Docker startup
+- [ ] FREE store blocked from creating 3rd product (402 returned)
+- [ ] Widget returns graceful response when recommendation limit reached
+- [ ] POST /api/dashboard/v1/billing/checkout returns valid Stripe Checkout URL
+- [ ] After Stripe payment, webhook updates store plan to STARTER/PRO/TEAM
+- [ ] POST /api/dashboard/v1/billing/portal returns valid Stripe Portal URL
+- [ ] Settings page shows current plan, usage bars, upgrade options
+- [ ] Admin can override store plan without Stripe
+- [ ] customer.subscription.deleted sets plan back to FREE
+- [ ] Recommendation counter resets on 1st of month
+
+---
+
+# FitVision — Phase 11 Prompts: Production Deployment
+
+> Pre-condition: Phase 10 complete. All features working locally. Stripe live keys configured. Domain fitvision.io registered.
+
+---
+
+## Prompt 11.1 — Backend Production Deployment (Railway + Neon)
+
+### CONTEXT
+FitVision backend (Spring Boot 3.x). Currently runs in Docker locally. Production target: Railway (backend) + Neon PostgreSQL (database).
+
+### OBJECTIVE
+Configure backend for production deployment on Railway with Neon PostgreSQL.
+
+**Neon PostgreSQL setup**
+- Create project at neon.tech
+- Connection string format: postgresql://user:password@host/dbname?sslmode=require
+- Flyway runs automatically on startup — all 9 migrations apply to fresh Neon database
+
+**application-prod.yml** (new profile)
+```yaml
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+server:
+  port: ${PORT:8080}
+
+logging:
+  level:
+    com.fitvision: INFO
+    root: WARN
+
+fitvision:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: 86400000
+  shopify:
+    encryption-key: ${SHOPIFY_ENCRYPTION_KEY}
+    shared-secret: ${SHOPIFY_SHARED_SECRET}
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+  prices:
+    starter: ${STRIPE_PRICE_STARTER}
+    pro: ${STRIPE_PRICE_PRO}
+    team: ${STRIPE_PRICE_TEAM}
+```
+
+**Dockerfile (production-ready)**
+```dockerfile
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY target/fitvision-backend-*.jar app.jar
+
+# Install Playwright browsers
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-Dspring.profiles.active=prod", "-jar", "app.jar"]
+```
+
+**railway.toml**
+```toml
+[build]
+builder = "dockerfile"
+
+[deploy]
+startCommand = "java -Dspring.profiles.active=prod -jar app.jar"
+healthcheckPath = "/actuator/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+```
+
+**Railway environment variables to set:**
+```
+DATABASE_URL=           (Neon connection string)
+JWT_SECRET=             (random 64-char string)
+SHOPIFY_ENCRYPTION_KEY= (32-char string)
+SHOPIFY_SHARED_SECRET=  (shared with Shopify App)
+STRIPE_SECRET_KEY=      (sk_live_...)
+STRIPE_WEBHOOK_SECRET=  (whsec_...)
+STRIPE_PRICE_STARTER=   (price_...)
+STRIPE_PRICE_PRO=       (price_...)
+STRIPE_PRICE_TEAM=      (price_...)
+SPRING_PROFILES_ACTIVE= prod
+```
+
+**CORS update for production**
+In SecurityConfig or CorsConfig, allow:
+- https://app.fitvision.io (dashboard)
+- https://fitvision.io (landing page)
+- https://*.myshopify.com (Shopify stores using widget)
+- Keep * for /api/widget/** (public widget endpoint)
+
+**Actuator hardening**
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+```
+
+### EXPECTED OUTPUT
+- application-prod.yml
+- Dockerfile (production-ready)
+- railway.toml
+- Updated SecurityConfig.java (production CORS)
+- Updated application.yml (actuator hardening)
+- README section: Railway deployment steps
+
+---
+
+## Prompt 11.2 — Dashboard Production Deployment (Vercel)
+
+### CONTEXT
+FitVision dashboard (Next.js 14). Production target: Vercel. API calls must point to Railway backend URL.
+
+### OBJECTIVE
+Configure Next.js dashboard for Vercel deployment.
+
+**.env.production**
+```
+NEXT_PUBLIC_API_URL=https://api.fitvision.io
+NEXT_PUBLIC_WIDGET_CDN=https://cdn.fitvision.io/widget/fitvision-widget.min.js
+```
+
+**next.config.js update**
+```javascript
+const nextConfig = {
+  output: 'standalone',
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+    ]
+  },
+}
+```
+
+**lib/api.ts update**
+- Replace hardcoded localhost:8080 with process.env.NEXT_PUBLIC_API_URL
+- Fallback: http://localhost:8080 for local dev
+
+**vercel.json**
+```json
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://api.fitvision.io/api/:path*" }
+  ]
+}
+```
+
+**Vercel environment variables to set:**
+```
+NEXT_PUBLIC_API_URL=https://api.fitvision.io
+NEXT_PUBLIC_WIDGET_CDN=https://cdn.fitvision.io/widget/fitvision-widget.min.js
+```
+
+**middleware.ts update**
+- Ensure cookie settings work in production (secure: true, sameSite: strict)
+
+### EXPECTED OUTPUT
+- .env.production
+- Updated next.config.js
+- vercel.json
+- Updated lib/api.ts (env-based URL)
+- Updated middleware.ts (production cookie settings)
+
+---
+
+## Prompt 11.3 — Widget CDN + CI/CD Pipeline
+
+### CONTEXT
+FitVision. Backend on Railway, dashboard on Vercel. Widget (fitvision-widget.min.js) needs to be served from a CDN at https://cdn.fitvision.io/widget/.
+
+Target: Cloudflare R2 + Cloudflare CDN (free tier covers this scale).
+
+CI/CD: GitHub Actions — one workflow per service.
+
+### OBJECTIVE
+Configure Cloudflare R2 for widget CDN and GitHub Actions workflows for all services.
+
+**Cloudflare R2 setup**
+- Bucket: fitvision-widget
+- Public URL: cdn.fitvision.io/widget/
+- CORS: allow all origins for GET requests
+- Cache: Cache-Control: public, max-age=31536000, immutable (versioned files)
+- Latest: Cache-Control: public, max-age=300 (5 min for fitvision-widget.min.js)
+
+**Widget versioning strategy**
+- fitvision-widget.min.js — always latest (short cache)
+- fitvision-widget.{version}.min.js — versioned (long cache, immutable)
+- Version read from package.json version field
+
+**GitHub Actions — Backend (.github/workflows/backend.yml)**
+```yaml
+name: Backend CI/CD
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'pom.xml', 'Dockerfile']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fitvision_test
+          POSTGRES_USER: fitvision
+          POSTGRES_PASSWORD: test
+        ports: ['5432:5432']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { java-version: '21', distribution: 'temurin' }
+      - run: mvn verify
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/fitvision_test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { java-version: '21', distribution: 'temurin' }
+      - run: mvn package -DskipTests
+      - uses: railway/deploy@v1
+        with:
+          service: fitvision-backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+```
+
+**GitHub Actions — Dashboard (.github/workflows/dashboard.yml)**
+```yaml
+name: Dashboard CI/CD
+on:
+  push:
+    branches: [main]
+    paths: ['dashboard/**']
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+        working-directory: dashboard
+      - run: npm run build
+        working-directory: dashboard
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+      - uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: dashboard
+```
+
+**GitHub Actions — Widget (.github/workflows/widget.yml)**
+```yaml
+name: Widget CI/CD
+on:
+  push:
+    branches: [main]
+    paths: ['widget/**']
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+        working-directory: widget
+      - run: npm run build
+        working-directory: widget
+      - name: Upload to Cloudflare R2
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: r2 object put fitvision-widget/widget/fitvision-widget.min.js --file=widget/dist/fitvision-widget.min.js
+```
+
+**GitHub Secrets to configure:**
+```
+RAILWAY_TOKEN
+VERCEL_TOKEN
+VERCEL_ORG_ID
+VERCEL_PROJECT_ID
+CLOUDFLARE_API_TOKEN
+NEXT_PUBLIC_API_URL
+```
+
+### PHASE 11 COMPLETION CHECKLIST
+- [ ] Railway backend responds at https://api.fitvision.io/actuator/health
+- [ ] Neon database has all 9 migrations applied
+- [ ] Vercel dashboard accessible at https://app.fitvision.io
+- [ ] Widget loads from https://cdn.fitvision.io/widget/fitvision-widget.min.js
+- [ ] Store can register, login, create product, upload size chart via production URLs
+- [ ] Widget recommendation works end-to-end on production
+- [ ] Stripe webhook receives events from live Stripe (configure endpoint in Stripe dashboard)
+- [ ] GitHub Actions: push to main triggers deploy for changed service only
+- [ ] CORS: widget works from any Shopify store domain
+
+---
+
+# FitVision — Phase 12 Prompts: Observability & Operations
+
+> Pre-condition: Phase 11 complete. All services running in production.
+
+---
+
+## Prompt 12.1 — Structured Logging + Sentry
+
+### CONTEXT
+FitVision backend (Spring Boot 3.x) running on Railway. Need structured logging with correlation IDs, error alerting via Sentry, and performance monitoring for the recommendation endpoint.
+
+### OBJECTIVE
+Add production-grade observability to the backend.
+
+**Structured logging**
+
+Add logstash-logback-encoder to pom.xml:
+```xml
+<dependency>
+    <groupId>net.logstash.logback</groupId>
+    <artifactId>logstash-logback-encoder</artifactId>
+    <version>7.4</version>
+</dependency>
+```
+
+logback-spring.xml (src/main/resources):
+```xml
+<configuration>
+  <springProfile name="prod">
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+    </appender>
+    <root level="INFO">
+      <appender-ref ref="JSON"/>
+    </root>
+  </springProfile>
+  <springProfile name="!prod">
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder><pattern>%d{HH:mm:ss} %-5level %logger{36} - %msg%n</pattern></encoder>
+    </appender>
+    <root level="DEBUG">
+      <appender-ref ref="CONSOLE"/>
+    </root>
+  </springProfile>
+</configuration>
+```
+
+**RequestIdFilter update**
+- Add X-Request-ID to MDC on every request: MDC.put("requestId", requestId)
+- Add tenantId to MDC after TenantContext is set: MDC.put("tenantId", tenantId)
+- Clear MDC in finally block
+
+**Sentry integration**
+```xml
+<dependency>
+    <groupId>io.sentry</groupId>
+    <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
+    <version>7.6.0</version>
+</dependency>
+```
+
+application-prod.yml additions:
+```yaml
+sentry:
+  dsn: ${SENTRY_DSN}
+  traces-sample-rate: 0.2
+  environment: production
+  release: ${APP_VERSION:unknown}
+```
+
+GlobalExceptionHandler update:
+- Capture unexpected exceptions to Sentry: Sentry.captureException(ex)
+- Do NOT capture expected business exceptions (PlanLimitException, FitVisionException with known codes)
+- Add tenantId and requestId to Sentry scope before capturing
+
+**Performance monitoring — recommendation endpoint**
+
+In RecommendationEngine, add timing:
+```java
+long start = System.currentTimeMillis();
+// ... existing logic ...
+long duration = System.currentTimeMillis() - start;
+log.info("recommendation_completed tenantId={} productId={} durationMs={} quality={}",
+    tenantId, productId, duration, result.getMatchQuality());
+if (duration > 500) {
+    log.warn("slow_recommendation tenantId={} productId={} durationMs={}", tenantId, productId, duration);
+}
+```
+
+**Health check enhancement**
+
+Custom HealthIndicator for database connectivity:
+```java
+@Component
+public class DatabaseHealthIndicator implements HealthIndicator {
+    // Check if a simple query runs in < 100ms
+    // Down if query fails or exceeds 200ms
+}
+```
+
+### EXPECTED OUTPUT
+- logback-spring.xml
+- Updated RequestIdFilter.java (MDC enrichment)
+- Updated pom.xml (logstash-logback-encoder + sentry)
+- Updated application-prod.yml (Sentry config)
+- Updated GlobalExceptionHandler.java (Sentry capture)
+- Updated RecommendationEngine.java (timing logs)
+- DatabaseHealthIndicator.java
+
+---
+
+## Prompt 12.2 — Admin Health Panel + Operations
+
+### CONTEXT
+FitVision. Structured logging and Sentry active. Admin area exists at /admin. Need an admin health panel showing system status, and operational tools for the platform operator.
+
+### OBJECTIVE
+Add system health panel to admin area and operational utilities.
+
+**Backend — Admin health endpoints**
+
+GET /api/admin/v1/health
+Returns:
+```json
+{
+  "database": { "status": "UP", "latencyMs": 12 },
+  "recommendationEngine": { "avgLatencyMs": 87, "p95LatencyMs": 234 },
+  "scrapeJobs": { "running": 0, "failedLast7Days": 2 },
+  "storeActivity": { "recommendationsLast24h": 1247, "activeStoresLast24h": 8 }
+}
+```
+
+GET /api/admin/v1/recommendations/stats
+- p50, p95, p99 latency for last 24h (computed from recommendation logs)
+- Quality distribution last 24h
+- Top 5 stores by recommendation count last 24h
+
+**AdminHealthService** (@Service)
+- getDatabaseLatency(): runs SELECT 1, measures ms
+- getRecommendationStats(Duration window): aggregates from RecommendationRequest table
+- getScrapeJobStats(): counts from ScrapeJob table
+
+**Frontend — Admin health page** (admin/health/page.tsx)
+
+Add to admin sidebar: "System Health" link
+
+Health page sections:
+
+System status cards:
+- Database: UP/DOWN badge + latency ms
+- Last recommendation: timestamp
+- Active stores (last 24h): count
+- Failed scrapes (last 7 days): count (red if > 0)
+
+Recommendation performance:
+- p50 / p95 / p99 latency (colour-coded: green < 200ms, yellow < 500ms, red > 500ms)
+- Quality distribution bar chart (last 24h)
+- Top stores by recommendation volume
+
+Scrape pipeline:
+- Last scrape per brand: brand name, status, timestamp, entries
+- "Force re-scrape all" button (triggers scrape for all brands)
+- "Force re-scrape {brand}" button per row
+
+**Force re-scrape all** (AdminController)
+POST /api/admin/v1/scrape-jobs/trigger-all
+- Triggers scrape for all global brands with registered scrapers
+- Returns { triggered: number, skipped: number }
+
+**Auto-refresh**
+- Health page auto-refreshes every 30 seconds
+- Show "Last updated: X seconds ago" counter
+
+### EXPECTED OUTPUT
+Backend:
+- AdminHealthService.java
+- Updated AdminController.java (health + stats + trigger-all endpoints)
+- AdminHealthResponse.java (DTO)
+- RecommendationStatsResponse.java (DTO)
+
+Frontend:
+- app/(admin)/admin/health/page.tsx
+- components/admin/SystemHealthCards.tsx
+- components/admin/RecommendationStatsPanel.tsx
+- components/admin/ScrapePipelineStatus.tsx
+- Updated components/admin/AdminSidebar.tsx (Health link added)
+- Updated lib/api.ts (health + stats methods)
+- Updated types.ts (health response types)
+
+### PHASE 12 COMPLETION CHECKLIST
+- [ ] JSON logs appear in Railway log viewer with requestId and tenantId fields
+- [ ] Sentry receives errors from production (test by triggering a 500)
+- [ ] Slow recommendations (> 500ms) appear as warnings in logs
+- [ ] /actuator/health returns database status
+- [ ] Admin health page loads and shows real metrics
+- [ ] p95 recommendation latency visible in admin
+- [ ] "Force re-scrape all" triggers scrape jobs for all brands
+- [ ] Health page auto-refreshes every 30 seconds
+- [ ] Failed scrapes last 7 days visible with count

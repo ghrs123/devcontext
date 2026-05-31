@@ -4,9 +4,11 @@ import com.fitvision.domain.store.Store;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,4 +41,16 @@ public interface StoreRepository extends JpaRepository<Store, UUID> {
                                                                 Pageable pageable);
 
         List<Store> findAllByOrderByCreatedAtDesc();
+
+    Optional<Store> findByStripeCustomerId(String stripeCustomerId);
+
+    Optional<Store> findByStripeSubscriptionId(String stripeSubscriptionId);
+
+    @Modifying
+    @Query("UPDATE Store s SET s.recommendationsCountCurrentMonth = s.recommendationsCountCurrentMonth + 1 WHERE s.id = :tenantId")
+    void incrementRecommendationCount(@Param("tenantId") UUID tenantId);
+
+    @Modifying
+    @Query("UPDATE Store s SET s.recommendationsCountCurrentMonth = 0, s.recommendationsCountResetAt = :resetAt WHERE s.id = :tenantId")
+    void resetRecommendationCount(@Param("tenantId") UUID tenantId, @Param("resetAt") LocalDateTime resetAt);
 }
