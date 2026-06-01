@@ -145,7 +145,7 @@ Configurar no Stripe Dashboard com `STRIPE_WEBHOOK_SECRET` matching.
 | Vercel env `NEXT_PUBLIC_API_URL` | CI secret |
 | R2 bucket + custom domain CDN | Cloudflare |
 | CORS prod origins | SecurityConfig |
-| Billing redirect URLs | **Pendente** — hardcoded localhost |
+| Billing redirect URLs | ✅ `fitvision.dashboard.url` |
 | Admin seed uma vez | Script manual |
 | Sentry DSN + APP_VERSION | Railway |
 

@@ -24,7 +24,7 @@
 | Admin | Stores, brands, recommendations, metrics | ✅ |
 | Shopify | OAuth app, connect, sync, webhooks | 🟡 (sessão in-memory) |
 | Scraping | 4 brands, scheduler, admin UI | ✅ |
-| Billing | Stripe checkout, portal, webhooks, limits | 🟡 (URLs localhost) |
+| Billing | Stripe checkout, portal, webhooks, limits | ✅ |
 | CI/CD | Railway, Vercel, R2 | ✅ |
 | Observability | Sentry, JSON logs, admin health, duration_ms | ✅ |
 
@@ -34,8 +34,8 @@
 
 | Item | Prioridade | Status |
 |------|------------|--------|
-| Billing redirect URLs prod | P0 | ⏳ hardcoded localhost |
-| `/api/admin/seed` público | P0 | 🟡 mitigar rede |
+| Billing redirect URLs prod | P0 | ✅ resolvido (`fitvision.dashboard.url`) |
+| `/api/admin/seed` público | P0 | ✅ mitigado (bootstrap token + one-time 410) |
 | Env var naming dev vs prod | P1 | ⏳ documentado em 14 |
 | GDPR delete/export API | P1 | ❌ |
 | Rate limiting API | P1 | ❌ |
@@ -69,11 +69,11 @@
 ## Melhorias técnicas sugeridas
 
 ### Curto prazo
-1. Env vars `FITVISION_DASHBOARD_URL` para Stripe redirects
-2. Proteger ou remover `/api/health/error-test` em prod
-3. IT tests AdminController + BillingController
-4. CI dashboard: adicionar `npm run lint`
-5. Mapear env vars Railway com tabela única
+1. IT tests AdminController + BillingController
+2. CI dashboard: adicionar `npm run lint`
+3. Mapear env vars Railway com tabela única
+4. Endpoints GDPR export/delete
+5. Rate limiting API
 
 ### Médio prazo
 1. Shopify app session store (Redis)
@@ -112,6 +112,6 @@ Secção completa em [AUDIT.md](./AUDIT.md) secção 10.
 ## Próximo marco sugerido (V11+)
 
 1. Migration V11 se novos campos billing/GDPR
-2. Fix billing URLs + env unification (**blocker prod billing UX**)
+2. Unificar nomenclatura de env vars dev/prod
 3. Admin IT suite
 4. GDPR MVP endpoints

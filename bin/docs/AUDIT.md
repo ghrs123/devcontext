@@ -2,7 +2,7 @@
 
 [← Glossário](./20-glossario.md) | [Índice](./README.md)
 
-**Data auditoria:** maio 2026  
+**Data auditoria:** maio 2026 (atualizado em junho 2026 para estado pós-fixes P0)  
 **Método:** análise estática código-fonte + exploração controllers, migrations, CI, configs  
 **Spec referência:** `FitVision-ProjectContext.md` (4041 linhas)
 
@@ -12,7 +12,12 @@
 
 FitVision é um **SaaS funcional** com backend Spring Boot maduro, dashboard Next.js, widget production-ready (50KB gzip), billing Stripe, scraping Playwright, CI/CD triplo (Railway/Vercel/R2) e observabilidade Phase 12 (Sentry, logs JSON, admin health).
 
-**Principais riscos:** URLs billing hardcoded localhost, endpoint admin seed público, gaps GDPR delete/export, ausência rate limiting, shopify-app sem persistência sessão e sem CI.
+**Principais riscos (atuais):** gaps GDPR delete/export, ausência rate limiting, shopify-app sem persistência sessão e sem CI.
+
+**Mitigações aplicadas desde a auditoria inicial:**
+- P0-1: billing redirects via `fitvision.dashboard.url`
+- P0-2: `/api/admin/seed` com `X-Bootstrap-Token` e bloqueio one-time (`410`)
+- P0-3: `/api/health/error-test` restrito ao profile `dev`
 
 **Cobertura testes backend:** boa para core store/widget; **fraca** para admin, billing, shopify.
 
@@ -40,9 +45,9 @@ FitVision é um **SaaS funcional** com backend Spring Boot maduro, dashboard Nex
 
 | ID | Issue | Evidência | Impacto | Recomendação |
 |----|-------|-----------|---------|--------------|
-| P0-1 | **Stripe checkout URLs localhost** | `BillingController.java` L104-105, L119 | Checkout prod redirecciona para localhost após pagamento | Env `FITVISION_DASHBOARD_URL`; usar em success/cancel/portal |
-| P0-2 | **`POST /api/admin/seed` sem auth** | `AdminSeedController`, `SecurityConfig` permitAll | Criação admin não autorizada se exposto internet | IP allowlist, one-time token, ou desactivar pós-bootstrap |
-| P0-3 | **`GET /api/health/error-test` público** | `HealthController` | DoS Sentry / ruído alertas | `@Profile("dev")` ou auth admin |
+| P0-1 | ~~Stripe checkout URLs localhost~~ | `BillingController` usa `fitvision.dashboard.url` | Resolvido | Monitorar env em deploy |
+| P0-2 | ~~`POST /api/admin/seed` sem auth~~ | Header `X-Bootstrap-Token` + one-time `410` | Mitigado | Rodar bootstrap apenas quando necessário |
+| P0-3 | ~~`GET /api/health/error-test` público~~ | Endpoint movido para controller `@Profile("dev")` | Mitigado | Manter fora de produção |
 
 ---
 
@@ -197,6 +202,6 @@ pom.xml, dashboard/package.json, widget/package.json
 
 ## 13. Conclusão
 
-O FitVision está **próximo de produção** para core recommendation SaaS, com gaps operacionais concentrados em **billing UX prod**, **bootstrap security**, **GDPR operationalization** e **shopify-app hardening**. A documentação em `/docs` reflecte o estado real do código em maio 2026.
+O FitVision está **próximo de produção** para core recommendation SaaS, com gaps operacionais concentrados em **GDPR operationalization**, **rate limiting** e **shopify-app hardening**. A documentação em `/docs` reflecte o estado real do código em junho 2026.
 
-**Próxima revisão audit:** após fix P0 e merge V11 migration.
+**Próxima revisão audit:** após implementação dos itens P1 principais (GDPR e rate limit) e revisão de CI do shopify-app.
