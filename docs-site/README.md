@@ -2,6 +2,8 @@
 
 Visualizador profissional dos ficheiros Markdown em [`../docs/`](../docs/). **Não duplica conteúdo** — carrega os `.md` em tempo real via `fetch`.
 
+**Última sincronização de conteúdo:** junho de 2026
+
 ## Abrir localmente
 
 ### Opção recomendada — servidor HTTP

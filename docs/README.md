@@ -2,7 +2,7 @@
 
 Documentação profissional do monorepo FitVision, gerada a partir de **análise do código-fonte real** (Spring Boot, Next.js, widget Vite, Shopify app, Docker, CI/CD).
 
-**Última revisão:** maio de 2026  
+**Última revisão:** junho de 2026  
 **Versão backend:** `0.0.1-SNAPSHOT` (`pom.xml`)  
 **Versão widget:** `1.0.0` (`widget/package.json`)
 

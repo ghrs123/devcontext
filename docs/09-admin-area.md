@@ -9,7 +9,7 @@
 **Status:** Implementado  
 Área operacional FitVision para utilizadores com JWT `role=ADMIN`. UI distinta (sidebar escura) separada da experiência store owner.
 
-**Bootstrap admin:** `POST /api/admin/seed` ou `./scripts/create-admin.sh` — **nunca** via `/auth/register`.
+**Bootstrap admin:** `POST /api/admin/seed` (header `X-Bootstrap-Token`) ou `./scripts/create-admin.sh` com token — **nunca** via `/auth/register`.
 
 ---
 

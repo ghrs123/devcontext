@@ -124,8 +124,12 @@
 
 ### UC-09 — Seed admin (bootstrap)
 
-**Endpoint:** `POST /api/admin/seed` (sem auth)  
-**Regra:** 409 se admin já existir — **nunca** via register público
+**Endpoint:** `POST /api/admin/seed` (sem JWT, mas com header obrigatório `X-Bootstrap-Token`)  
+**Regra:**
+- `401` se token ausente/inválido
+- `410` se bootstrap já usado ou desativado
+- `409` se já existir admin no banco
+- **nunca** via register público
 
 **Status:** Implementado — script `scripts/create-admin.sh`
 

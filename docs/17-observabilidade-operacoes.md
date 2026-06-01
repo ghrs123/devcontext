@@ -108,9 +108,9 @@ Métricas:
 | Endpoint | Uso |
 |----------|-----|
 | `GET /api/health` | Ping simples |
-| `GET /api/health/error-test` | **Teste Sentry** — lança excepção |
+| `GET /api/health/error-test` | Teste local de erro — disponível apenas com profile `dev` |
 
-**Cuidado:** `/error-test` exposto publicamente — desactivar ou proteger em prod.
+**Nota:** em produção este endpoint não deve estar activo; o controller está anotado com `@Profile("dev")`.
 
 ---
 
@@ -166,6 +166,6 @@ Backend Sentry only no código analisado.
 | Prometheus metrics | Roadmap | **Não encontrado** |
 | Grafana dashboards | Roadmap | **Não no repo** |
 | Distributed tracing full | Sentry 20% traces | Parcial |
-| `/api/health/error-test` prod | — | Risco exposto |
+| `/api/health/error-test` prod | — | Mitigado (dev-only) |
 
 Ver [AUDIT.md](./AUDIT.md).

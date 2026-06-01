@@ -118,10 +118,15 @@ Backend e shared secret devem coincidir com `.env` raiz.
 ## Criar conta admin
 
 ```bash
-./scripts/create-admin.sh admin@fitvision.io sua-senha
+./scripts/create-admin.sh admin@fitvision.io sua-senha seu-bootstrap-token
 ```
 
-Chama `POST /api/admin/seed` — falha 409 se admin já existir.
+Chama `POST /api/admin/seed` com `X-Bootstrap-Token`.
+
+Respostas esperadas:
+- `401` token ausente/inválido
+- `410` bootstrap já usado ou desativado
+- `409` admin já existente
 
 **Nunca** criar admin via `/auth/register`.
 

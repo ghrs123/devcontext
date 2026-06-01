@@ -42,7 +42,7 @@ flowchart TD
 
 - `/actuator/health`
 - `/swagger-ui/**`, `/v3/api-docs/**`
-- `/api/admin/seed`
+- `/api/admin/seed` (com gate no controller: `X-Bootstrap-Token` + estado one-time)
 - `/api/shopify/**`
 - `/api/billing/webhooks`
 - `/api/dashboard/v1/auth/**`
@@ -115,7 +115,7 @@ repository.findById(id); // proibido em dados tenant-scoped
 | Password store | BCrypt strength **12** |
 | API keys | Geradas no registo; regeneráveis |
 | Shopify token | AES-256-GCM (`fitvision.shopify.encryption-key`) |
-| Admin seed | Endpoint dedicado, 409 se existir |
+| Admin seed | Endpoint dedicado com `X-Bootstrap-Token`, bloqueio `410` após uso |
 
 ---
 
@@ -156,6 +156,6 @@ repository.findById(id); // proibido em dados tenant-scoped
 | Middleware sem verify JWT | Médio | UX routing only |
 | Rate limiting | Médio | **Não implementado** |
 | API keys plaintext DB | Médio | Sem hash at rest |
-| `/api/admin/seed` público | Alto se exposto prod | Mitigar com rede/firewall |
+| `/api/admin/seed` sem JWT | Médio | Mitigado por `X-Bootstrap-Token` + one-time (`410`) |
 
 Ver [AUDIT.md](./AUDIT.md) P0–P1.

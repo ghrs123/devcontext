@@ -18,10 +18,31 @@ logs/
 .env
 .env.local
 *.env
+application-prod.yml
+application-local.yml
+
+# Node
+node_modules/
+.next/
+dist/
+.npm/
+
+# Playwright
+dashboard/e2e/results/
+dashboard/playwright-report/
+
+# Vite widget build
+widget/dist/
+
+# Vercel
+.vercel/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Scratch files
+maven_output.txt
 
 # Scratch files
 maven_output.txt

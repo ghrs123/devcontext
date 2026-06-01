@@ -130,7 +130,7 @@ Definidos em `src/main/java/com/fitvision/domain/billing/Plan.java`:
 | `SecretKeyAuthFilter` | Documentado para size-charts | **Existe mas não está na cadeia de filtros** (`SecurityConfig`) |
 | `WebhookController` | Mencionado | **Placeholder vazio** — sem endpoints |
 | `WidgetController` | Mencionado | **Placeholder vazio** — lógica em `WidgetRecommendationController` |
-| URLs Stripe checkout | Produção | **Hardcoded `localhost:3000`** em `BillingController` |
+| URLs Stripe checkout | Produção | **Configuráveis via `fitvision.dashboard.url`** (`BillingController`) |
 
 Ver [AUDIT.md](./AUDIT.md) para lista completa.
 

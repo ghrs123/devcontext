@@ -94,7 +94,7 @@ sequenceDiagram
     S->>D: Redirect settings?billing=success
 ```
 
-**Pendente:** URLs success/cancel hardcoded `http://localhost:3000` — ver [14-configuracao-env.md](./14-configuracao-env.md).
+**Atual:** URLs success/cancel/portal usam `fitvision.dashboard.url` (`FITVISION_DASHBOARD_URL` em dev; valor fixo prod em `application-prod.yml`).
 
 ---
 

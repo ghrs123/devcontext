@@ -49,7 +49,7 @@ Verificar:
 **Admin (CLI):**
 
 ```bash
-./scripts/create-admin.sh admin@fitvision.io MinhaSenhaSegura8
+./scripts/create-admin.sh admin@fitvision.io MinhaSenhaSegura8 seu-bootstrap-token
 ```
 
 Login admin → redirect automático `/admin/dashboard`

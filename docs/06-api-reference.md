@@ -248,8 +248,9 @@
 | Método | Path | Auth |
 |--------|------|------|
 | GET | `/api/health` | Nenhuma |
-| GET | `/api/health/error-test` | Nenhuma (dispara excepção teste) |
 | GET | `/actuator/health` | Nenhuma |
+
+`/api/health/error-test` existe apenas no profile `dev` (`DevErrorTestController`) para testes locais de erro.
 
 ---
 
@@ -282,8 +283,10 @@
 ### POST `/api/admin/seed` (bootstrap)
 
 **Path:** `/api/admin/seed` (fora de `/v1`)  
-**Auth:** nenhuma  
+**Auth:** sem JWT, mas exige header `X-Bootstrap-Token`  
 **Body:** `{ "email": "admin@fitvision.io", "password": "..." }`  
+**401:** token ausente/inválido  
+**410:** bootstrap desativado ou já utilizado  
 **409:** `ADMIN_ALREADY_EXISTS`
 
 ---

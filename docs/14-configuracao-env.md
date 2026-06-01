@@ -47,6 +47,8 @@
 | `fitvision.jwt.expiration-hours` | — | `24` |
 | `fitvision.shopify.encryption-key` | `SHOPIFY_ENCRYPTION_KEY` | placeholder base64 |
 | `fitvision.shopify.shared-secret` | `FITVISION_SHOPIFY_SHARED_SECRET` | dev secret |
+| `fitvision.dashboard.url` | `FITVISION_DASHBOARD_URL` | `http://localhost:3000` |
+| `fitvision.admin.bootstrap-token` | `ADMIN_BOOTSTRAP_TOKEN` | vazio (desativado) |
 | `stripe.secret-key` | `STRIPE_SECRET_KEY` | vazio |
 | `stripe.webhook-secret` | `STRIPE_WEBHOOK_SECRET` | vazio |
 | `stripe.prices.starter` | `STRIPE_PRICE_STARTER` | vazio |
@@ -66,6 +68,8 @@
 | `fitvision.jwt.secret` | `JWT_SECRET` | **Nome diferente do .env.example** |
 | `fitvision.shopify.encryption-key` | `SHOPIFY_ENCRYPTION_KEY` | |
 | `fitvision.shopify.shared-secret` | `SHOPIFY_SHARED_SECRET` | **Nome diferente: sem prefixo FITVISION_** |
+| `fitvision.dashboard.url` | (valor fixo prod no ficheiro) | `https://app.fitvision.io` |
+| `fitvision.admin.bootstrap-token` | `ADMIN_BOOTSTRAP_TOKEN` | obrigatório para usar `/api/admin/seed` |
 | `stripe.*` | `STRIPE_*` | Obrigatório billing prod |
 | `sentry.dsn` | `SENTRY_DSN` | |
 | `sentry.release` | `APP_VERSION` | |
@@ -136,17 +140,20 @@
 
 ---
 
-## Billing URLs hardcoded
+## Billing URLs
 
 **Ficheiro:** `BillingController.java`
 
 ```java
-String successUrl = "http://localhost:3000/settings?billing=success";
-String cancelUrl  = "http://localhost:3000/settings?billing=cancelled";
-String returnUrl  = "http://localhost:3000/settings";
+@Value("${fitvision.dashboard.url}")
+private String dashboardUrl;
+
+String successUrl = dashboardUrl + "/settings?billing=success";
+String cancelUrl  = dashboardUrl + "/settings?billing=cancelled";
+String returnUrl  = dashboardUrl + "/settings";
 ```
 
-**Status:** Pendente — deveria usar env `FITVISION_DASHBOARD_URL` ou similar (**não encontrado**)
+**Status:** Implementado
 
 ---
 
@@ -156,6 +163,5 @@ String returnUrl  = "http://localhost:3000/settings";
 |----------|--------------|
 | `REDIS_URL` | Cache/sessions |
 | `SMTP_*` | Email |
-| `FITVISION_DASHBOARD_URL` | Stripe redirects prod |
 
 Ver [AUDIT.md](./AUDIT.md).
