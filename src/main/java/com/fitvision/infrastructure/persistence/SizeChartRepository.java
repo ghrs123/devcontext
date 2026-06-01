@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface SizeChartRepository extends JpaRepository<SizeChart, UUID> {
@@ -34,11 +35,23 @@ public interface SizeChartRepository extends JpaRepository<SizeChart, UUID> {
     @Query("UPDATE SizeChart sc SET sc.active = false WHERE sc.productId = :productId")
     void deactivateAllByProductId(@Param("productId") UUID productId);
 
+        @Modifying
+        @Query("UPDATE SizeChart sc SET sc.scrapeSourceUrl = :scrapeSourceUrl WHERE sc.id = :sizeChartId")
+        void updateScrapeSourceUrl(@Param("sizeChartId") UUID sizeChartId,
+                                                           @Param("scrapeSourceUrl") String scrapeSourceUrl);
+
     /**
      * Returns all size chart versions for a product, ordered from newest to oldest.
      * Used to determine the next version number.
      */
     @Query("SELECT sc FROM SizeChart sc WHERE sc.productId = :productId ORDER BY sc.version DESC")
     List<SizeChart> findAllByProductIdOrderByVersionDesc(@Param("productId") UUID productId);
+
+        /**
+         * Returns product IDs that currently have an active size chart.
+         * Used by dashboard product listing to compute hasSizeChart without N+1 queries.
+         */
+        @Query("SELECT sc.productId FROM SizeChart sc WHERE sc.active = true AND sc.productId IN :productIds")
+        Set<UUID> findActiveProductIdsByProductIds(@Param("productIds") List<UUID> productIds);
 }
 

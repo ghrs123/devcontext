@@ -47,13 +47,10 @@ public class SecretKeyAuthFilter extends OncePerRequestFilter {
         this.storeRepository = storeRepository;
     }
 
-    /**
-     * Skip the filter for widget and actuator paths — those are handled by separate mechanisms.
-     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/api/widget/") || path.startsWith("/actuator/");
+        return !path.startsWith("/api/dashboard/v1/size-charts/");
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.fitvision.domain.product;
 
+import com.fitvision.domain.brand.Brand;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -16,7 +17,7 @@ public class Product {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "brand_id", nullable = false)
+    @Column(name = "brand_id")
     private UUID brandId;
 
     @Column(name = "tenant_id", nullable = false)
@@ -40,11 +41,15 @@ public class Product {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
 
     public UUID getBrandId() { return brandId; }
     public void setBrandId(UUID brandId) { this.brandId = brandId; }
+    public void setBrand(Brand brand) { this.brandId = brand != null ? brand.getId() : null; }
 
     public UUID getTenantId() { return tenantId; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
@@ -66,4 +71,7 @@ public class Product {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public LocalDateTime getDeletedAt() { return deletedAt; }
+    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
 }

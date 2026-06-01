@@ -1,0 +1,52 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    com.fitvision: INFO
+    root: WARN
+
+fitvision:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-hours: 24
+  shopify:
+    encryption-key: ${SHOPIFY_ENCRYPTION_KEY}
+    shared-secret: ${SHOPIFY_SHARED_SECRET}
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+  prices:
+    starter: ${STRIPE_PRICE_STARTER}
+    pro: ${STRIPE_PRICE_PRO}
+    team: ${STRIPE_PRICE_TEAM}
+
+sentry:
+  dsn: ${SENTRY_DSN}
+  traces-sample-rate: 0.2
+  environment: production
+  release: ${APP_VERSION:unknown}

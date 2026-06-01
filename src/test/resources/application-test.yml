@@ -31,3 +31,23 @@ logging:
     org.flywaydb: WARN
     org.testcontainers: INFO
     com.zaxxer.hikari: WARN
+
+stripe:
+  secret-key: sk_test_placeholder_not_used_in_it
+  webhook-secret: whsec_test_placeholder
+  prices:
+    starter: price_test_starter
+    pro: price_test_pro
+    team: price_test_team
+
+fitvision:
+  dashboard:
+    url: http://localhost:3000
+  admin:
+    bootstrap-token: test-bootstrap-token
+  jwt:
+    secret: "fitvision-test-secret-change-this-in-production-32-bytes-minimum!"
+    expiration-hours: 24
+  shopify:
+    encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    shared-secret: fitvision-shopify-test-secret

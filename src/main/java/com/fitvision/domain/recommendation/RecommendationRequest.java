@@ -52,6 +52,9 @@ public class RecommendationRequest {
     @Column(name = "body_measurements_stored", nullable = false)
     private boolean bodyMeasurementsStored;
 
+    @Column(name = "duration_ms")
+    private Integer durationMs;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 }

@@ -21,13 +21,16 @@ public class RequestIdFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String requestId = UUID.randomUUID().toString();
+        String requestId = request.getHeader(REQUEST_ID_HEADER);
+        if (requestId == null || requestId.isBlank()) {
+            requestId = UUID.randomUUID().toString();
+        }
         MDC.put(MDC_KEY, requestId);
         response.setHeader(REQUEST_ID_HEADER, requestId);
         try {
             filterChain.doFilter(request, response);
         } finally {
-            MDC.remove(MDC_KEY);
+            MDC.clear();
         }
     }
 }

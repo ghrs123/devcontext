@@ -1,5 +1,6 @@
 package com.fitvision.engine.recommendation;
 
+import com.fitvision.domain.billing.PlanLimitsService;
 import com.fitvision.domain.brand.Brand;
 import com.fitvision.domain.product.Product;
 import com.fitvision.domain.recommendation.Gender;
@@ -42,6 +43,7 @@ class RecommendationEngineTest {
     @Mock private SizeEntryRepository sizeEntryRepository;
     @Mock private RecommendationRequestRepository recommendationRequestRepository;
     @Mock private BrandRepository brandRepository;
+    @Mock private PlanLimitsService planLimitsService;
 
     // --- Real stateless services ---
     private BodyProfileCalculator bodyProfileCalculator;
@@ -68,7 +70,7 @@ class RecommendationEngineTest {
                 bodyProfileCalculator, sizeChartMatcher,
                 productRepository, sizeChartRepository,
                 sizeEntryRepository, recommendationRequestRepository,
-                brandRepository);
+                brandRepository, planLimitsService);
 
         tenantId = UUID.randomUUID();
         productId = UUID.randomUUID();

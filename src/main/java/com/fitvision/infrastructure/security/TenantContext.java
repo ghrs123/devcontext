@@ -1,5 +1,7 @@
 package com.fitvision.infrastructure.security;
 
+import org.slf4j.MDC;
+
 import java.util.UUID;
 
 /**
@@ -21,15 +23,20 @@ import java.util.UUID;
  */
 public final class TenantContext {
 
+    public static final String MDC_TENANT_ID_KEY = "tenantId";
+
     private static final ThreadLocal<UUID> HOLDER = new ThreadLocal<>();
 
     private TenantContext() {
         // Utility class — do not instantiate
     }
 
-    /** Binds {@code tenantId} to the current thread. */
+    /** Binds {@code tenantId} to the current thread and MDC for structured logging. */
     public static void set(UUID tenantId) {
         HOLDER.set(tenantId);
+        if (tenantId != null) {
+            MDC.put(MDC_TENANT_ID_KEY, tenantId.toString());
+        }
     }
 
     /**
@@ -40,8 +47,9 @@ public final class TenantContext {
         return HOLDER.get();
     }
 
-    /** Removes the tenant ID from the current thread. Always call in a {@code finally} block. */
+    /** Removes the tenant ID from the current thread and MDC. Always call in a {@code finally} block. */
     public static void clear() {
         HOLDER.remove();
+        MDC.remove(MDC_TENANT_ID_KEY);
     }
 }

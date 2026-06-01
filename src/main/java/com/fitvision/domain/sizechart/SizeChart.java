@@ -25,6 +25,9 @@ public class SizeChart {
     @Column(name = "source", nullable = false)
     private String source;
 
+    @Column(name = "scrape_source_url")
+    private String scrapeSourceUrl;
+
     @Column(name = "active", nullable = false)
     private boolean active;
 
@@ -42,6 +45,9 @@ public class SizeChart {
 
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
+
+    public String getScrapeSourceUrl() { return scrapeSourceUrl; }
+    public void setScrapeSourceUrl(String scrapeSourceUrl) { this.scrapeSourceUrl = scrapeSourceUrl; }
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }

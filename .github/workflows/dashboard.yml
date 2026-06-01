@@ -1,0 +1,118 @@
+name: Dashboard CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: dashboard
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: dashboard
+
+      - name: Build
+        run: npm run build
+        working-directory: dashboard
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+      - name: Prepare local backend env for E2E
+        run: |
+          cat > .env << 'EOF'
+          POSTGRES_DB=fitvision
+          POSTGRES_USER=fitvision
+          POSTGRES_PASSWORD=fitvision
+          DB_URL=jdbc:postgresql://fitvision-db:5432/fitvision
+          DB_USERNAME=fitvision
+          DB_PASSWORD=fitvision
+          FITVISION_JWT_SECRET=e2e-ci-secret-key-change-me
+          FITVISION_JWT_EXPIRATION_HOURS=24
+          SHOPIFY_ENCRYPTION_KEY=e2e-ci-shopify-key
+          FITVISION_SHOPIFY_SHARED_SECRET=e2e-ci-shared-secret
+          NEXT_PUBLIC_API_URL=http://localhost:8080
+          EOF
+
+      - name: Start backend services for E2E
+        run: docker compose up -d fitvision-db fitvision-backend
+
+      - name: Wait for backend readiness
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8080/api/health > /dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Backend did not become ready in time"
+          docker compose logs fitvision-backend --tail 200
+          exit 1
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+        working-directory: dashboard
+        env:
+          E2E_API_URL: http://localhost:8080
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+
+      - name: Fail on skipped E2E tests
+        run: |
+          node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('e2e/results/report.json','utf8')); const skip=(report.stats&&typeof report.stats.skipped==='number')?report.stats.skipped:0; if(skip>0){console.error('E2E skipped tests detected:', skip); process.exit(1);} console.log('No skipped E2E tests detected.');"
+        working-directory: dashboard
+
+      - name: Stop backend services
+        if: always()
+        run: docker compose down -v
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: dashboard
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Run smoke tests
+        run: |
+          chmod +x scripts/smoke-test.sh
+          ./scripts/smoke-test.sh \
+            https://api.fitvision.io \
+            https://app.fitvision.io \
+            https://cdn.fitvision.io/widget/fitvision-widget.min.js

@@ -1,0 +1,70 @@
+spring:
+  profiles:
+    active: dev
+  application:
+    name: fitvision-backend
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/fitvision}
+    username: ${DB_USERNAME:fitvision}
+    password: ${DB_PASSWORD:fitvision}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    com.fitvision: DEBUG
+    org.springframework.security: INFO
+    org.flywaydb: INFO
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+  prices:
+    starter: ${STRIPE_PRICE_STARTER:}
+    pro: ${STRIPE_PRICE_PRO:}
+    team: ${STRIPE_PRICE_TEAM:}
+
+fitvision:
+  jwt:
+    # change this in production
+    secret: "fitvision-dev-secret-change-this-in-production-32-bytes-minimum!"
+    expiration-hours: 24
+  shopify:
+    # AES-256 key: must be Base64-encoded 32 bytes. Generate with: openssl rand -base64 32
+    encryption-key: ${SHOPIFY_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+    # Shared secret between the Shopify App server and this backend — change in production
+    shared-secret: ${FITVISION_SHOPIFY_SHARED_SECRET:fitvision-shopify-dev-secret}

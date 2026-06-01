@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitVision — Documentação Técnica</title>
+  <meta name="description" content="Documentação técnica do monorepo FitVision">
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Prism syntax highlighting -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" id="prism-theme">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-numbers/prism-line-numbers.min.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Saltar para o conteúdo</a>
+
+  <div class="app">
+    <aside class="sidebar" id="sidebar" aria-label="Navegação da documentação">
+      <div class="sidebar-header">
+        <a href="#/" class="brand">
+          <span class="brand-icon" aria-hidden="true">FV</span>
+          <span class="brand-text">
+            <strong>FitVision</strong>
+            <small>Documentação</small>
+          </span>
+        </a>
+        <button type="button" class="sidebar-close" id="sidebar-close" aria-label="Fechar menu">×</button>
+      </div>
+
+      <div class="sidebar-search">
+        <label for="nav-search" class="visually-hidden">Pesquisar documentos</label>
+        <input type="search" id="nav-search" placeholder="Pesquisar…" autocomplete="off">
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav"></nav>
+
+      <div class="sidebar-footer">
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Alternar tema claro/escuro">
+          <span class="theme-icon theme-icon-light" aria-hidden="true">☀</span>
+          <span class="theme-icon theme-icon-dark" aria-hidden="true">☾</span>
+          <span class="theme-label">Tema</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="sidebar-overlay" id="sidebar-overlay" hidden></div>
+
+    <div class="main-wrapper">
+      <header class="topbar">
+        <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Abrir menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <p class="topbar-title" id="topbar-title">FitVision — Documentação Técnica</p>
+        <a href="https://github.com" class="topbar-link visually-hidden" id="raw-md-link" target="_blank" rel="noopener">Markdown</a>
+      </header>
+
+      <div class="content-layout">
+        <main class="content" id="main-content">
+          <div class="loading" id="loading" hidden>
+            <div class="spinner" aria-hidden="true"></div>
+            <p>A carregar documento…</p>
+          </div>
+          <article class="doc-article" id="doc-content"></article>
+          <div class="error-panel" id="error-panel" hidden>
+            <h2>Não foi possível carregar o documento</h2>
+            <p id="error-message"></p>
+            <details>
+              <summary>Como resolver</summary>
+              <p>Este site precisa de um servidor HTTP local. Os ficheiros Markdown são carregados a partir de <code>/docs/</code> e não funcionam com <code>file://</code>.</p>
+              <pre><code>cd c:\workspace\devcontext
+npm run docs</code></pre>
+              <p>Depois abra <a href="http://localhost:4000/docs-site/">http://localhost:4000/docs-site/</a></p>
+            </details>
+          </div>
+        </main>
+
+        <aside class="toc" id="toc" aria-label="Índice do documento" hidden>
+          <p class="toc-heading">Nesta página</p>
+          <nav id="toc-nav"></nav>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <!-- Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <!-- Mermaid -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+  <!-- Prism -->
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-java.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-sql.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-markup.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

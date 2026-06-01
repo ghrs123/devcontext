@@ -59,6 +59,7 @@ public class SizeChartService {
      * @throws SizeChartParseException  if the parse result is a failure or has no entries
      * @throws ProductNotFoundException if the product does not belong to this tenant
      */
+    @Transactional
     public SizeChartUploadResult uploadFromFile(UUID tenantId, UUID productId,
                                                 ParseResult parseResult, String source) {
         if (!parseResult.isSuccess()) {
@@ -80,6 +81,7 @@ public class SizeChartService {
      * @throws SizeChartParseException  if entries is null or empty
      * @throws ProductNotFoundException if the product does not belong to this tenant
      */
+    @Transactional
     public SizeChartUploadResult uploadManual(UUID tenantId, UUID productId,
                                               List<SizeEntryData> entries) {
         if (entries == null || entries.isEmpty()) {

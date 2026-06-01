@@ -1,11 +1,13 @@
 package com.fitvision.api.widget;
 
+import com.fitvision.domain.billing.PlanLimitException;
 import com.fitvision.domain.recommendation.Gender;
 import com.fitvision.engine.recommendation.RecommendationEngine;
 import com.fitvision.engine.recommendation.RecommendationInput;
 import com.fitvision.engine.recommendation.RecommendationOutput;
 import com.fitvision.infrastructure.security.TenantContext;
 import com.fitvision.shared.response.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +27,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/widget/v1")
+@Tag(name = "Widget")
 public class WidgetRecommendationController {
 
     private static final Logger log = LoggerFactory.getLogger(WidgetRecommendationController.class);
@@ -62,7 +65,13 @@ public class WidgetRecommendationController {
                 .storeBodyData(request.isStoreBodyData())
                 .build();
 
-        RecommendationOutput output = recommendationEngine.recommend(input);
+        RecommendationOutput output;
+        try {
+            output = recommendationEngine.recommend(input);
+        } catch (PlanLimitException ex) {
+            // Buyer-facing: never expose billing details — return graceful fallback.
+            return ResponseEntity.ok(ApiResponse.ok(SizeRecommendationResponse.planLimitFallback()));
+        }
 
         SizeRecommendationResponse response = SizeRecommendationResponse.from(output);
 

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FitVision — Shopify App</title>
+  <script src="https://unpkg.com/@shopify/app-bridge@3/umd/index.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f6f6f7; color: #202223; padding: 24px; }
+    .card { background: #fff; border: 1px solid #e1e3e5; border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+    p  { font-size: 14px; color: #6d7175; line-height: 1.5; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .badge-success { background: #d4edda; color: #155724; }
+    .badge-warn    { background: #fff3cd; color: #856404; }
+    .key-box { font-family: monospace; background: #f6f6f7; border: 1px solid #e1e3e5; border-radius: 4px; padding: 6px 10px; font-size: 13px; word-break: break-all; margin-top: 8px; }
+    .btn { display: inline-block; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; }
+    .btn-primary { background: #008060; color: #fff; }
+    .btn-primary:hover { background: #006e52; }
+    .btn-secondary { background: #f1f1f1; color: #202223; border: 1px solid #c9cccf; }
+    .btn-secondary:hover { background: #e4e5e7; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+    .stat { font-size: 28px; font-weight: 700; color: #202223; }
+    .stat-label { font-size: 13px; color: #6d7175; margin-top: 2px; }
+    #sync-result { margin-top: 12px; font-size: 13px; }
+    a { color: #008060; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h1>FitVision</h1>
+  <p>Smart sizing recommendations for your Shopify store.</p>
+</div>
+
+<div class="card" id="connection-card">
+  <h2>Connection Status</h2>
+  <p id="status-text">Checking…</p>
+  <div class="key-box" id="api-key-box" style="display:none"></div>
+</div>
+
+<div class="card">
+  <h2>Product Sync</h2>
+  <p>Sync your Shopify products to FitVision so you can upload size charts for each one.</p>
+  <div class="row">
+    <div>
+      <div class="stat" id="synced-count">—</div>
+      <div class="stat-label">Products synced</div>
+    </div>
+  </div>
+  <div class="row">
+    <button class="btn btn-primary" id="sync-btn" onclick="syncProducts()">Sync products now</button>
+  </div>
+  <div id="sync-result"></div>
+</div>
+
+<div class="card">
+  <h2>Widget</h2>
+  <p>The FitVision widget is automatically injected into your store via a ScriptTag. Store owners still need to add the container div to their product template.</p>
+  <div class="row">
+    <a href="#" id="dashboard-link" class="btn btn-secondary" target="_blank">Open FitVision Dashboard →</a>
+    <a href="#" id="guide-link" class="btn btn-secondary" target="_blank">Widget Integration Guide →</a>
+  </div>
+</div>
+
+<script>
+  const DASHBOARD_URL = 'http://localhost:3000';
+
+  async function loadStatus() {
+    try {
+      const res = await fetch('/status');
+      const data = await res.json();
+
+      const statusEl = document.getElementById('status-text');
+      const keyEl = document.getElementById('api-key-box');
+
+      if (data.connected) {
+        statusEl.innerHTML = '<span class="badge badge-success">Connected</span>';
+        if (data.apiKeyPublic) {
+          keyEl.textContent = 'API Key: ' + data.apiKeyPublic;
+          keyEl.style.display = 'block';
+          document.getElementById('dashboard-link').href = DASHBOARD_URL + '/dashboard';
+          document.getElementById('guide-link').href = DASHBOARD_URL + '/settings#integration';
+        }
+      } else {
+        statusEl.innerHTML = '<span class="badge badge-warn">Not connected</span>';
+      }
+    } catch (e) {
+      document.getElementById('status-text').textContent = 'Could not load status.';
+    }
+  }
+
+  async function syncProducts() {
+    const btn = document.getElementById('sync-btn');
+    const result = document.getElementById('sync-result');
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    result.textContent = '';
+
+    try {
+      const res = await fetch('/app/sync', { method: 'POST' });
+      const data = await res.json();
+
+      document.getElementById('synced-count').textContent = data.synced ?? '—';
+      result.textContent = `Done — synced ${data.synced}, skipped ${data.failed}, total ${data.total}.`;
+    } catch (e) {
+      result.textContent = 'Sync failed. Please try again.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sync products now';
+    }
+  }
+
+  loadStatus();
+</script>
+
+</body>
+</html>

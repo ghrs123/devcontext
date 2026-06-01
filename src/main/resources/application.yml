@@ -42,10 +42,33 @@ management:
         include: health,info
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: never
 
 logging:
   level:
     com.fitvision: DEBUG
     org.springframework.security: INFO
     org.flywaydb: INFO
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+  prices:
+    starter: ${STRIPE_PRICE_STARTER:}
+    pro: ${STRIPE_PRICE_PRO:}
+    team: ${STRIPE_PRICE_TEAM:}
+
+fitvision:
+  dashboard:
+    url: ${FITVISION_DASHBOARD_URL:http://localhost:3000}
+  admin:
+    bootstrap-token: ${ADMIN_BOOTSTRAP_TOKEN:}
+  jwt:
+    # change this in production
+    secret: "fitvision-dev-secret-change-this-in-production-32-bytes-minimum!"
+    expiration-hours: 24
+  shopify:
+    # AES-256 key: must be Base64-encoded 32 bytes. Generate with: openssl rand -base64 32
+    encryption-key: ${SHOPIFY_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+    # Shared secret between the Shopify App server and this backend — change in production
+    shared-secret: ${FITVISION_SHOPIFY_SHARED_SECRET:fitvision-shopify-dev-secret}
