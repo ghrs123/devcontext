@@ -5,6 +5,17 @@ on:
     branches: [main]
     paths:
       - 'widget/**'
+      - '.github/workflows/widget.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'widget/**'
+      - '.github/workflows/widget.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: widget-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
@@ -32,6 +43,7 @@ jobs:
         run: echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
 
       - name: Upload latest widget to R2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -42,6 +54,7 @@ jobs:
             --cache-control "public, max-age=300"
 
       - name: Upload versioned widget to R2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
