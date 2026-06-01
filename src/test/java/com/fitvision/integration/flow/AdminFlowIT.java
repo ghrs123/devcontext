@@ -1,15 +1,5 @@
 package com.fitvision.integration.flow;
 
-import com.fitvision.AbstractIntegrationTest;
-import com.fitvision.domain.billing.Plan;
-import com.fitvision.domain.sizechart.SizeEntryData;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.web.servlet.MvcResult;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +9,12 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.web.servlet.MvcResult;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -26,8 +22,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fitvision.AbstractIntegrationTest;
+import com.fitvision.domain.billing.Plan;
+import com.fitvision.domain.sizechart.SizeEntryData;
+
 @AutoConfigureMockMvc
 class AdminFlowIT extends AbstractIntegrationTest {
+
+        private static final String BOOTSTRAP_TOKEN_HEADER = "X-Bootstrap-Token";
+        private static final String BOOTSTRAP_TOKEN_VALUE = "test-bootstrap-token";
 
     private final List<UUID> storeIdsToCleanup = new ArrayList<>();
     private UUID globalBrandId;
@@ -48,6 +51,7 @@ class AdminFlowIT extends AbstractIntegrationTest {
 
         String email = "seed-admin-" + testUniqueSuffix() + "@fitvision.io";
         MvcResult result = mockMvc.perform(post(ADMIN_SEED_URL)
+                        .header(BOOTSTRAP_TOKEN_HEADER, BOOTSTRAP_TOKEN_VALUE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "email", email,
@@ -77,16 +81,18 @@ class AdminFlowIT extends AbstractIntegrationTest {
                 "name", "Seed Admin Twice");
 
         mockMvc.perform(post(ADMIN_SEED_URL)
+                        .header(BOOTSTRAP_TOKEN_HEADER, BOOTSTRAP_TOKEN_VALUE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(seedBody)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post(ADMIN_SEED_URL)
+                        .header(BOOTSTRAP_TOKEN_HEADER, BOOTSTRAP_TOKEN_VALUE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(seedBody)))
-                .andExpect(status().isConflict())
+                .andExpect(status().isGone())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error.code", is("ADMIN_ALREADY_EXISTS")));
+                .andExpect(jsonPath("$.error.message", is("Bootstrap already used")));
     }
 
     @Test

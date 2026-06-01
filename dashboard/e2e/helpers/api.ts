@@ -176,10 +176,14 @@ export async function createOrLoginAdmin(
   const email = overrides.email ?? process.env.E2E_ADMIN_EMAIL ?? 'admin@fitvision.io';
   const password = overrides.password ?? process.env.E2E_ADMIN_PASSWORD ?? 'password123';
   const name = overrides.name ?? process.env.E2E_ADMIN_NAME ?? 'FitVision Admin';
+  const bootstrapToken = process.env.E2E_ADMIN_BOOTSTRAP_TOKEN ?? 'test-bootstrap-token';
 
   const response = await fetch(`${API_BASE_URL}/api/admin/seed`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Bootstrap-Token': bootstrapToken,
+    },
     body: JSON.stringify({ email, password, name }),
   });
 
@@ -195,13 +199,13 @@ export async function createOrLoginAdmin(
     return { email, password, jwt };
   }
 
-  if (response.status === 409) {
+  if (response.status === 409 || response.status === 410) {
     try {
       const jwt = await loginForAdminToken(email, password);
       return { email, password, jwt };
     } catch {
       throw new Error(
-        `Admin already exists but login failed for ${email}. Set E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD to valid credentials.`
+        `Admin bootstrap is unavailable (status ${response.status}) and login failed for ${email}. Set E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD to valid credentials.`
       );
     }
   }

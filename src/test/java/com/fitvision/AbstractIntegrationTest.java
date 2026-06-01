@@ -1,12 +1,11 @@
 package com.fitvision;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fitvision.domain.sizechart.SizeEntryData;
-import com.fitvision.domain.store.Store;
-import com.fitvision.domain.store.StoreRole;
-import com.fitvision.infrastructure.persistence.StoreRepository;
-import com.fitvision.infrastructure.security.JwtService;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ClassPathResource;
@@ -19,20 +18,21 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fitvision.api.admin.AdminSeedController;
+import com.fitvision.domain.sizechart.SizeEntryData;
+import com.fitvision.domain.store.Store;
+import com.fitvision.domain.store.StoreRole;
+import com.fitvision.infrastructure.persistence.StoreRepository;
+import com.fitvision.infrastructure.security.JwtService;
 
 /**
  * Base class for all FitVision integration tests.
@@ -99,6 +99,9 @@ public abstract class AbstractIntegrationTest {
 
     @Autowired
     protected PasswordEncoder passwordEncoder;
+
+    @Autowired
+    protected AdminSeedController adminSeedController;
 
     @DynamicPropertySource
     static void overrideDataSourceProperties(DynamicPropertyRegistry registry) {
@@ -261,6 +264,7 @@ public abstract class AbstractIntegrationTest {
             cleanupStoreData(adminId);
         }
         jdbcTemplate.update("DELETE FROM stores WHERE role = 'ADMIN'");
+        adminSeedController.resetBootstrapState();
     }
 
     protected void cleanupShopifyStore(UUID storeId) {

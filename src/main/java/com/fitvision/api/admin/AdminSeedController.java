@@ -1,5 +1,21 @@
 package com.fitvision.api.admin;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.fitvision.api.dashboard.auth.AuthResponse;
 import com.fitvision.domain.store.Store;
 import com.fitvision.domain.store.StoreRole;
@@ -8,25 +24,17 @@ import com.fitvision.infrastructure.security.JwtService;
 import com.fitvision.shared.exception.ErrorCode;
 import com.fitvision.shared.exception.FitVisionException;
 import com.fitvision.shared.response.ApiResponse;
+import com.fitvision.shared.testing.VisibleForTesting;
+
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.RequestHeader;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/admin")
 @Tag(name = "Admin")
 public class AdminSeedController {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminSeedController.class);
 
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String PLAN_ADMIN = "ADMIN";
@@ -37,11 +45,10 @@ public class AdminSeedController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    @Value("${fitvision.admin.seed.enabled:true}")
-    private boolean seedEnabled;
+    @Value("${fitvision.admin.bootstrap-token:}")
+    private String bootstrapToken;
 
-    @Value("${fitvision.admin.seed.token:}")
-    private String seedToken;
+    private volatile boolean bootstrapUsed = false;
 
     public AdminSeedController(StoreRepository storeRepository,
                                PasswordEncoder passwordEncoder,
@@ -54,15 +61,22 @@ public class AdminSeedController {
     @PostMapping("/seed")
     public ResponseEntity<ApiResponse<AuthResponse>> seedAdmin(
             @Valid @RequestBody AdminSeedRequest request,
-            @RequestHeader(value = "X-FitVision-Seed-Token", required = false) String requestSeedToken) {
-        if (!seedEnabled) {
-            throw new FitVisionException(ErrorCode.UNAUTHORIZED, "Admin seed endpoint is disabled.");
+            @RequestHeader(value = "X-Bootstrap-Token", required = false) String requestBootstrapToken) {
+        if (bootstrapUsed) {
+            return ResponseEntity.status(HttpStatus.GONE)
+                    .body(ApiResponse.error(ErrorCode.VALIDATION_ERROR, "Bootstrap already used"));
         }
-        if (StringUtils.hasText(seedToken) && !seedToken.equals(requestSeedToken)) {
-            throw new FitVisionException(ErrorCode.UNAUTHORIZED, "Invalid or missing admin seed token.");
+        if (!StringUtils.hasText(bootstrapToken)) {
+            return ResponseEntity.status(HttpStatus.GONE)
+                    .body(ApiResponse.error(ErrorCode.VALIDATION_ERROR, "Bootstrap disabled"));
+        }
+        if (!bootstrapToken.equals(requestBootstrapToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(ErrorCode.UNAUTHORIZED, "Invalid or missing bootstrap token"));
         }
 
         if (storeRepository.existsByRole(StoreRole.ADMIN.name())) {
+            bootstrapUsed = true;
             throw new FitVisionException(ErrorCode.ADMIN_ALREADY_EXISTS,
                     "An admin account already exists. Seed endpoint is disabled.");
         }
@@ -93,9 +107,16 @@ public class AdminSeedController {
                 .build();
 
         Store saved = storeRepository.save(admin);
+        bootstrapUsed = true;
+        log.info("Admin bootstrap complete - seed endpoint disabled");
         String token = jwtService.generateToken(saved.getId(), saved.getEmail(), StoreRole.ADMIN.name());
         AuthResponse response = new AuthResponse(token, "Bearer", jwtService.getExpirationSeconds(), saved.getApiKeyPublic());
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @VisibleForTesting
+    public void resetBootstrapState() {
+        bootstrapUsed = false;
     }
 
     private String generateApiKey() {

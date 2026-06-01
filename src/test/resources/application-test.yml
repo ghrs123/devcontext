@@ -41,6 +41,10 @@ stripe:
     team: price_test_team
 
 fitvision:
+  dashboard:
+    url: http://localhost:3000
+  admin:
+    bootstrap-token: test-bootstrap-token
   jwt:
     secret: "fitvision-test-secret-change-this-in-production-32-bytes-minimum!"
     expiration-hours: 24

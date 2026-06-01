@@ -1,18 +1,12 @@
 package com.fitvision.api.dashboard.billing;
 
-import com.fitvision.domain.billing.Plan;
-import com.fitvision.domain.billing.StripeService;
-import org.springframework.beans.factory.annotation.Value;
-import com.fitvision.domain.store.Store;
-import com.fitvision.infrastructure.persistence.ProductRepository;
-import com.fitvision.infrastructure.persistence.StoreRepository;
-import com.fitvision.infrastructure.security.TenantContext;
-import com.fitvision.shared.exception.ErrorCode;
-import com.fitvision.shared.exception.FitVisionException;
-import com.fitvision.shared.response.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,9 +15,17 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.UUID;
+import com.fitvision.domain.billing.Plan;
+import com.fitvision.domain.billing.StripeService;
+import com.fitvision.domain.store.Store;
+import com.fitvision.infrastructure.persistence.ProductRepository;
+import com.fitvision.infrastructure.persistence.StoreRepository;
+import com.fitvision.infrastructure.security.TenantContext;
+import com.fitvision.shared.exception.ErrorCode;
+import com.fitvision.shared.exception.FitVisionException;
+import com.fitvision.shared.response.ApiResponse;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/dashboard/v1/billing")
