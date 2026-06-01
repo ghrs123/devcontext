@@ -8,6 +8,22 @@ on:
       - 'pom.xml'
       - 'Dockerfile'
       - 'Dockerfile.dev'
+      - 'scripts/smoke-test.sh'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - 'Dockerfile'
+      - 'Dockerfile.dev'
+      - 'scripts/smoke-test.sh'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -44,6 +60,7 @@ jobs:
           SPRING_PROFILES_ACTIVE: test
 
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -66,6 +83,7 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
   smoke-test:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: deploy
     runs-on: ubuntu-latest
     steps:
