@@ -10,12 +10,15 @@ import com.fitvision.shared.exception.FitVisionException;
 import com.fitvision.shared.response.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -34,6 +37,12 @@ public class AdminSeedController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    @Value("${fitvision.admin.seed.enabled:true}")
+    private boolean seedEnabled;
+
+    @Value("${fitvision.admin.seed.token:}")
+    private String seedToken;
+
     public AdminSeedController(StoreRepository storeRepository,
                                PasswordEncoder passwordEncoder,
                                JwtService jwtService) {
@@ -43,7 +52,16 @@ public class AdminSeedController {
     }
 
     @PostMapping("/seed")
-    public ResponseEntity<ApiResponse<AuthResponse>> seedAdmin(@Valid @RequestBody AdminSeedRequest request) {
+    public ResponseEntity<ApiResponse<AuthResponse>> seedAdmin(
+            @Valid @RequestBody AdminSeedRequest request,
+            @RequestHeader(value = "X-FitVision-Seed-Token", required = false) String requestSeedToken) {
+        if (!seedEnabled) {
+            throw new FitVisionException(ErrorCode.UNAUTHORIZED, "Admin seed endpoint is disabled.");
+        }
+        if (StringUtils.hasText(seedToken) && !seedToken.equals(requestSeedToken)) {
+            throw new FitVisionException(ErrorCode.UNAUTHORIZED, "Invalid or missing admin seed token.");
+        }
+
         if (storeRepository.existsByRole(StoreRole.ADMIN.name())) {
             throw new FitVisionException(ErrorCode.ADMIN_ALREADY_EXISTS,
                     "An admin account already exists. Seed endpoint is disabled.");

@@ -30,6 +30,12 @@ logging:
     root: WARN
 
 fitvision:
+  dashboard:
+    url: https://app.fitvision.io
+  admin:
+    seed:
+      enabled: false
+      token: ${FITVISION_ADMIN_SEED_TOKEN:}
   jwt:
     secret: ${JWT_SECRET}
     expiration-hours: 24

@@ -45,6 +45,9 @@ public class BillingController {
     @Value("${stripe.prices.team:}")
     private String teamPriceId;
 
+    @Value("${fitvision.dashboard.url}")
+    private String dashboardUrl;
+
     public BillingController(StoreRepository storeRepository,
                              ProductRepository productRepository,
                              StripeService stripeService) {
@@ -101,8 +104,8 @@ public class BillingController {
         }
 
         String customerId = ensureStripeCustomer(store);
-        String successUrl = "http://localhost:3000/settings?billing=success";
-        String cancelUrl  = "http://localhost:3000/settings?billing=cancelled";
+        String successUrl = dashboardUrl + "/settings?billing=success";
+        String cancelUrl  = dashboardUrl + "/settings?billing=cancelled";
 
         String checkoutUrl = stripeService.createCheckoutSession(customerId, priceId, successUrl, cancelUrl);
         log.info("Billing checkout session created: storeId={}", tenantId);
@@ -116,7 +119,7 @@ public class BillingController {
         Store store = requireStore(tenantId);
 
         String customerId = ensureStripeCustomer(store);
-        String returnUrl = "http://localhost:3000/settings";
+        String returnUrl = dashboardUrl + "/settings";
 
         String portalUrl = stripeService.createBillingPortalSession(customerId, returnUrl);
         log.info("Billing portal session created: storeId={}", tenantId);

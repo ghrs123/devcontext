@@ -59,6 +59,12 @@ stripe:
     team: ${STRIPE_PRICE_TEAM:}
 
 fitvision:
+  dashboard:
+    url: ${FITVISION_DASHBOARD_URL:http://localhost:3000}
+  admin:
+    seed:
+      enabled: ${FITVISION_ADMIN_SEED_ENABLED:true}
+      token: ${FITVISION_ADMIN_SEED_TOKEN:}
   jwt:
     # change this in production
     secret: "fitvision-dev-secret-change-this-in-production-32-bytes-minimum!"

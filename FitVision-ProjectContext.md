@@ -670,11 +670,61 @@ docker logs devcontext-fitvision-backend-1 --tail 30
 - Scraping: robots.txt check mandatory, 3s rate limit, failed scrape never overwrites active chart
 - Next migration: V9 (V8 used for scrape_jobs)
 
-## Known Bugs (found during T1.1)
+## Known Bugs
 
-- **Brand-less product recommendation bug**: RecommendationEngine fails when product has no brand — production bug, fix before deploy
-- **Store profile path**: mismatch between spec and actual endpoint path — confirmed and corrected in tests
-- **Widget plan-limit behaviour**: returns HTTP 200 with planLimitFallback (correct) — spec incorrectly said 402
+Fixed during testing:
+- ✅ Monthly counter reset: JPA cache not cleared after @Modifying reset — fixed with flushAutomatically/clearAutomatically
+- ✅ Shopify reconnect: inactive stores not reactivated on reconnect — fixed in ShopifyService
+- ✅ Store profile path: spec vs code mismatch — corrected in tests
+- ✅ Widget plan-limit: confirmed correct (200 fallback, not 402) — spec was wrong
+
+Pending fix (F1/F2/F3):
+- ⚠️ Stripe checkout URLs: localhost hardcoded in BillingController (P0-1)
+- ⚠️ Admin seed: no bootstrap token protection (P0-2)
+- ⚠️ Error-test endpoint: public DoS vector (P0-3)
+- ⚠️ API secret key: stored plaintext in database (P1-4)
+- ⚠️ No rate limiting (P1-3)
+- ⚠️ GDPR endpoints absent (P1-2)
+- ⚠️ Shopify sessions in-memory (P1-5)
+
+## Audit Findings (May 2026)
+
+Full audit in AUDIT.md. Summary:
+
+**P0 — Critical (blocks production):**
+- P0-1: Stripe checkout URLs hardcoded to localhost
+- P0-2: POST /api/admin/seed publicly accessible
+- P0-3: GET /api/health/error-test public DoS vector
+
+**P1 — High (before first paying customers):**
+- P1-1: Env var naming inconsistent across services
+- P1-2: GDPR delete/export endpoints absent
+- P1-3: Rate limiting absent
+- P1-4: API secret key stored plaintext in DB
+- P1-5: Shopify app sessions in-memory (lost on restart)
+- P1-7: Zero integration tests for admin/billing/Shopify (now fixed in T1.2)
+
+**P2 — Medium:**
+- P2-4: Sentry only on backend
+- P2-6: No JaCoCo coverage gate
+- P2-7: No staging environment
+
+## Fix Batch Status
+
+### F1 — P0 Critical Fixes 🔲 PENDING (prompt ready)
+- Stripe checkout URLs via FITVISION_DASHBOARD_URL env var
+- Admin seed protected with X-Bootstrap-Token + auto-disable after first use
+- Error-test moved to POST /api/admin/v1/health/error-test (requires admin JWT)
+
+### F2 — P1 Critical Fixes 🔲 PENDING
+- F2.1: API secret key hashed with BCrypt (V11 migration)
+- F2.2: AdminControllerIT + BillingControllerIT + ShopifyControllerIT (29 new tests)
+- F2.3: Shopify app session persistence (connect-pg-simple on Neon)
+
+### F3 — P1 Operational Fixes 🔲 PENDING
+- F3.1: Rate limiting (Bucket4j) — 60 req/min widget, 10 req/min auth
+- F3.2: GDPR delete + export endpoints (V12 migration)
+- F3.3: Sentry for Next.js dashboard + /docs/environment-variables.md
 
 ## Decisions Pending
 - Pricing tiers finalisation
@@ -4876,3 +4926,469 @@ smoke-test:
 - [ ] smoke-test-local.sh exits 0 against localhost
 - [ ] GitHub Actions smoke test job runs after every deploy to main
 - [ ] CI fails and shows which check failed when a service is down
+
+# FitVision — Fix Batch F1: P0 Critical Fixes
+
+> Source: AUDIT.md — P0-1, P0-2, P0-3
+> Execute before any production traffic. All three fixes in a single prompt.
+
+---
+
+## Prompt F1 — P0 Critical Fixes
+
+### CONTEXT
+Three production blockers found during security audit. All must be fixed before real users access the platform.
+
+### FIX 1 — Stripe checkout URLs hardcoded to localhost (P0-1)
+
+In `BillingController.java` the success/cancel/portal return URLs are hardcoded to `http://localhost:3000`.
+
+**application.yml** — add:
+```yaml
+fitvision:
+  dashboard:
+    url: ${FITVISION_DASHBOARD_URL:http://localhost:3000}
+```
+
+**application-prod.yml** — add:
+```yaml
+fitvision:
+  dashboard:
+    url: https://app.fitvision.io
+```
+
+**BillingController.java:**
+- Inject: `@Value("${fitvision.dashboard.url}") private String dashboardUrl;`
+- Replace ALL `http://localhost:3000` with `dashboardUrl`
+- Success URL: `dashboardUrl + "/settings?billing=success"`
+- Cancel URL: `dashboardUrl + "/settings?billing=cancelled"`
+- Portal return URL: `dashboardUrl + "/settings"`
+
+### FIX 2 — POST /api/admin/seed publicly accessible (P0-2)
+
+**application.yml** — add:
+```yaml
+fitvision:
+  admin:
+    bootstrap-token: ${ADMIN_BOOTSTRAP_TOKEN:}
+```
+
+**AdminSeedController.java:**
+- Inject: `@Value("${fitvision.admin.bootstrap-token:}") private String bootstrapToken;`
+- Add: `private boolean bootstrapUsed = false;`
+- At start of seed method:
+  - If `bootstrapUsed`: return 410 GONE "Bootstrap already used"
+  - If `bootstrapToken` blank: return 410 GONE "Bootstrap disabled"
+  - Read `X-Bootstrap-Token` header — if missing or wrong: return 401
+- After creating admin: set `bootstrapUsed = true`, log "Admin bootstrap complete — seed endpoint disabled"
+- Add `@VisibleForTesting void resetBootstrapState()` method for test isolation
+
+**AbstractIntegrationTest.java:**
+- Call `adminSeedController.resetBootstrapState()` inside `deleteAllAdmins()`
+
+**AdminFlowIT.java:**
+- All `POST /api/admin/seed` calls must include `X-Bootstrap-Token: test-bootstrap-token` header
+
+**application-test.yml** — add:
+```yaml
+fitvision:
+  admin:
+    bootstrap-token: test-bootstrap-token
+```
+
+**scripts/create-admin.sh:**
+```bash
+#!/bin/bash
+# Usage: ./scripts/create-admin.sh <email> <password> <bootstrap-token> [base-url]
+curl -X POST ${4:-http://localhost:8080}/api/admin/seed \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Token: $3" \
+  -d "{\"email\": \"$1\", \"password\": \"$2\", \"name\": \"FitVision Admin\"}"
+```
+
+### FIX 3 — GET /api/health/error-test publicly accessible (P0-3)
+
+- Find the controller with `/api/health/error-test` (HealthController or similar)
+- Remove the public endpoint entirely
+- Add to `AdminController.java` under `/api/admin/v1/health/error-test` (POST, not GET):
+```java
+@PostMapping("/health/error-test")
+public ResponseEntity<Void> triggerTestError() {
+    log.warn("Sentry test error triggered by admin");
+    throw new RuntimeException("FitVision Sentry test — admin triggered");
+}
+```
+- Update `SecurityConfig.java`: remove `/api/health/error-test` from permitAll if present
+
+### VALIDATION
+```bash
+# P0-1: no localhost hardcoded
+grep -r "localhost:3000" src/main/java/com/fitvision/api/dashboard/billing/
+# → 0 results
+
+# P0-2: seed without token returns 401
+curl -X POST http://localhost:8080/api/admin/seed \
+  -H "Content-Type: application/json" \
+  -d '{"email":"hack@test.com","password":"hack","name":"Hacker"}'
+# → 401
+
+# P0-3: old endpoint gone
+curl http://localhost:8080/api/health/error-test
+# → 404
+
+# All tests still pass
+mvn test
+# → 120 tests, 0 failures
+```
+
+### EXPECTED OUTPUT
+- `BillingController.java` (env-based URLs)
+- `application.yml` + `application-prod.yml` (dashboard URL + bootstrap token)
+- `AdminSeedController.java` (bootstrap token + auto-disable + resetBootstrapState)
+- `AbstractIntegrationTest.java` (resetBootstrapState call)
+- `AdminFlowIT.java` (bootstrap token header on all seed calls)
+- `application-test.yml` (bootstrap token)
+- `scripts/create-admin.sh` (token parameter)
+- `AdminController.java` (error-test endpoint added as POST)
+- `SecurityConfig.java` (public error-test removed)
+
+---
+
+# FitVision — Fix Batch F2: P1 Critical Fixes
+
+> Execute after F1. Before accepting first paying customers.
+
+---
+
+## Prompt F2.1 — API Secret Key Hashing (P1-4)
+
+### CONTEXT
+`stores.api_key_secret` stored plaintext in database. If DB is compromised, all store secret keys are exposed.
+
+### OBJECTIVE
+Hash the secret key with BCrypt. Store sees it once on creation/regeneration — after that, only regeneration is possible.
+
+**V11__hash_api_key_secret.sql:**
+```sql
+ALTER TABLE stores ADD COLUMN api_key_secret_hash VARCHAR(255);
+UPDATE stores SET api_key_secret_hash = NULL;
+ALTER TABLE stores DROP COLUMN api_key_secret;
+```
+
+**Store.java:**
+- Remove `apiKeySecret` field
+- Add `apiKeySecretHash` field
+
+**StoreService / ApiKeyService (wherever keys are generated):**
+```java
+String rawSecret = generateSecureRandom(); // existing logic
+String hash = BCrypt.hashpw(rawSecret, BCrypt.gensalt(12));
+store.setApiKeySecretHash(hash);
+// Return rawSecret to caller ONCE — never store plaintext
+```
+
+**SecretKeyAuthFilter.java:**
+```java
+// Load store by api_key_public
+// BCrypt.checkpw(providedSecret, store.getApiKeySecretHash())
+```
+
+**StoreController.java:**
+- `POST /api-keys/regenerate`: generate raw secret, hash it, save, return raw secret once with message "Copy now — not shown again"
+- `GET /api-keys`: return `{ apiKeyPublic, hasSecret: true }` — never return hash
+
+**Dashboard settings page:**
+- Show raw secret once after regeneration with "Copy now — this will not be shown again" warning
+
+### CONSTRAINTS
+- BCrypt work factor 12
+- Raw secret never logged
+- Migration invalidates all existing secrets — stores must regenerate
+- Next migration: V12
+
+### EXPECTED OUTPUT
+- V11__hash_api_key_secret.sql
+- Updated Store.java
+- Updated StoreController.java
+- Updated SecretKeyAuthFilter.java
+- Updated dashboard settings page
+
+---
+
+## Prompt F2.2 — Shopify App Session Persistence (P1-5)
+
+### CONTEXT
+Shopify App uses express-session with in-memory store. Sessions lost on every Railway restart (deployments). Store owners must reinstall the app after every backend deploy.
+
+### OBJECTIVE
+Replace in-memory session store with PostgreSQL-backed persistence using connect-pg-simple.
+
+```bash
+npm install connect-pg-simple
+```
+
+**Session table (run once on Neon):**
+```sql
+CREATE TABLE IF NOT EXISTS shopify_sessions (
+    sid VARCHAR NOT NULL PRIMARY KEY,
+    sess JSON NOT NULL,
+    expire TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shopify_sessions_expire ON shopify_sessions(expire);
+```
+
+**src/index.js:**
+```javascript
+import connectPg from 'connect-pg-simple'
+import session from 'express-session'
+
+const PgSession = connectPg(session)
+
+app.use(session({
+  store: new PgSession({
+    conString: config.database.url,
+    tableName: 'shopify_sessions',
+    pruneSessionInterval: 3600,
+  }),
+  secret: config.session.secret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: config.isProduction,
+    httpOnly: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  },
+}))
+```
+
+**src/config.js additions:**
+```javascript
+database: { url: process.env.DATABASE_URL },
+session: { secret: process.env.SESSION_SECRET },
+isProduction: process.env.NODE_ENV === 'production',
+```
+
+**.env.example additions:**
+```
+DATABASE_URL=postgresql://user:pass@host/dbname?sslmode=require
+SESSION_SECRET=random-64-char-string
+NODE_ENV=development
+```
+
+### EXPECTED OUTPUT
+- Updated `shopify-app/package.json`
+- Updated `shopify-app/src/index.js`
+- Updated `shopify-app/src/config.js`
+- Updated `shopify-app/.env.example`
+- SQL snippet in README for session table creation
+
+---
+
+# FitVision — Fix Batch F3: P1 Operational Fixes
+
+> Execute after F2. Before scaling to real users.
+
+---
+
+## Prompt F3.1 — Rate Limiting (P1-3)
+
+### CONTEXT
+No rate limiting on any endpoint. Widget endpoint is public beyond API key. Bad actors can exhaust quotas or generate high costs.
+
+### OBJECTIVE
+Add rate limiting with Bucket4j on widget and auth endpoints.
+
+**pom.xml:**
+```xml
+<dependency>
+    <groupId>com.giffing.bucket4j.spring.boot.starter</groupId>
+    <artifactId>bucket4j-spring-boot-starter</artifactId>
+    <version>0.10.0</version>
+</dependency>
+<dependency>
+    <groupId>com.github.ben-manes.caffeine</groupId>
+    <artifactId>caffeine</artifactId>
+</dependency>
+```
+
+**application.yml additions:**
+```yaml
+spring:
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=100000,expireAfterWrite=3600s
+
+bucket4j:
+  enabled: true
+  filters:
+    - cache-name: rate-limit-cache
+      url: /api/widget/.*
+      rate-limits:
+        - bandwidths:
+            - capacity: 60
+              time: 1
+              unit: minutes
+      filter-key-type: ip
+    - cache-name: rate-limit-cache
+      url: /api/dashboard/v1/auth/.*
+      rate-limits:
+        - bandwidths:
+            - capacity: 10
+              time: 1
+              unit: minutes
+      filter-key-type: ip
+```
+
+**Limits:**
+- Widget: 60 req/min per IP
+- Auth (login/register): 10 req/min per IP
+- Admin: 30 req/min per IP
+
+**HTTP 429 response:**
+```json
+{ "code": "RATE_LIMIT_EXCEEDED", "message": "Too many requests. Please slow down." }
+```
+Header: `Retry-After: {seconds}`
+
+Add `RATE_LIMIT_EXCEEDED` to ErrorCode.java.
+Add 429 handler to GlobalExceptionHandler.java.
+
+### EXPECTED OUTPUT
+- Updated pom.xml
+- Updated application.yml
+- Updated ErrorCode.java
+- Updated GlobalExceptionHandler.java
+
+---
+
+## Prompt F3.2 — GDPR Delete + Export (P1-2)
+
+### CONTEXT
+No GDPR data subject request endpoints exist. Under GDPR, store owners can request deletion and export of their data.
+
+### OBJECTIVE
+Add delete and export endpoints for store owners.
+
+**V12__add_gdpr_fields.sql:**
+```sql
+ALTER TABLE stores
+    ADD COLUMN deleted_at TIMESTAMP,
+    ADD COLUMN deletion_requested_at TIMESTAMP;
+CREATE INDEX idx_stores_deleted_at ON stores(deleted_at);
+```
+
+**StoreController additions:**
+
+`GET /api/dashboard/v1/stores/export`
+- Returns JSON with: store profile, all products, size charts, recommendation summary (counts only, no buyer data), brands
+- Header: `Content-Disposition: attachment; filename="fitvision-export-{storeId}.json"`
+- Log: `GDPR export requested by store {storeId}`
+
+`DELETE /api/dashboard/v1/stores/account`
+- Body: `{ "confirmation": "DELETE MY ACCOUNT" }` — exact string required
+- Validates confirmation — returns 400 if wrong
+- Hard-deletes: products, size charts, size entries, recommendation requests
+- Anonymises store: email → `deleted-{uuid}@fitvision-deleted.io`, name → "Deleted Store", status → DELETED
+- Cancels Stripe subscription if active
+- Invalidates API keys (set to null)
+- Returns 204
+- Log: `GDPR account deletion completed for store {storeId}`
+
+**ApiKeyAuthFilter.java + JwtAuthFilter.java:**
+- Add check: `status != 'DELETED'` before allowing requests
+
+### CONSTRAINTS
+- Export must not include raw buyer measurements
+- Deletion requires exact confirmation string
+- Stripe cancelled before account deletion
+- All deletion actions logged at WARN level
+
+### EXPECTED OUTPUT
+- V12__add_gdpr_fields.sql
+- Updated StoreController.java
+- GdprExportResponse.java (DTO)
+- Updated ApiKeyAuthFilter.java
+- Updated JwtAuthFilter.java (or equivalent)
+
+---
+
+## Prompt F3.3 — Sentry Frontend + Env Vars Docs (P2-4, P1-1)
+
+### CONTEXT
+Sentry only tracks backend. Dashboard errors are invisible. Env var naming is inconsistent across services making Railway setup error-prone.
+
+### OBJECTIVE
+Add Sentry to Next.js dashboard. Create unified env var documentation.
+
+**Dashboard:**
+```bash
+npm install @sentry/nextjs
+```
+
+`dashboard/sentry.client.config.ts`:
+```typescript
+import * as Sentry from '@sentry/nextjs'
+Sentry.init({
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  environment: process.env.NODE_ENV,
+  tracesSampleRate: 0.1,
+})
+```
+
+`dashboard/sentry.server.config.ts`:
+```typescript
+import * as Sentry from '@sentry/nextjs'
+Sentry.init({
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  environment: process.env.NODE_ENV,
+  tracesSampleRate: 0.1,
+})
+```
+
+Update `next.config.js` to wrap with `withSentryConfig`.
+
+Add to `.env.production`:
+```
+NEXT_PUBLIC_SENTRY_DSN=https://...@sentry.io/...
+SENTRY_ORG=your-org
+SENTRY_AUTH_TOKEN=your-token
+```
+
+**Create `/docs/environment-variables.md`** with a complete table for:
+- Backend (Railway): DATABASE_URL, JWT_SECRET, SHOPIFY_ENCRYPTION_KEY, SHOPIFY_SHARED_SECRET, STRIPE_*, FITVISION_DASHBOARD_URL, ADMIN_BOOTSTRAP_TOKEN, SENTRY_DSN, SPRING_PROFILES_ACTIVE
+- Dashboard (Vercel): NEXT_PUBLIC_API_URL, NEXT_PUBLIC_WIDGET_CDN, NEXT_PUBLIC_SENTRY_DSN, SENTRY_ORG, SENTRY_AUTH_TOKEN
+- Shopify App (Railway): SHOPIFY_API_KEY, SHOPIFY_API_SECRET, HOST_NAME, FITVISION_API_URL, FITVISION_SHOPIFY_SECRET, FITVISION_ADMIN_EMAIL, FITVISION_ADMIN_PASSWORD, DATABASE_URL, SESSION_SECRET, NODE_ENV
+- GitHub Secrets: RAILWAY_TOKEN, VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, CLOUDFLARE_API_TOKEN, SENTRY_AUTH_TOKEN
+
+### EXPECTED OUTPUT
+- `dashboard/sentry.client.config.ts`
+- `dashboard/sentry.server.config.ts`
+- Updated `dashboard/next.config.js`
+- Updated `dashboard/.env.production`
+- Updated `dashboard/package.json`
+- `/docs/environment-variables.md`
+
+---
+
+## Fix Batches Completion Checklist
+
+### F1 — P0 ✅ after execution:
+- [ ] No localhost:3000 in BillingController
+- [ ] Admin seed returns 401 without bootstrap token
+- [ ] /api/health/error-test returns 404
+- [ ] 120 tests still passing
+
+### F2 — P1 Critical ✅ after execution:
+- [ ] V11 migration applied — api_key_secret column replaced with api_key_secret_hash
+- [ ] Secret key shown once on regeneration with warning
+- [ ] Shopify app sessions survive Railway restart
+- [ ] connect-pg-simple using Neon DB
+
+### F3 — P1 Operational ✅ after execution:
+- [ ] 429 returned after 10 rapid auth requests
+- [ ] GDPR export returns JSON file
+- [ ] GDPR delete with wrong confirmation returns 400
+- [ ] Sentry captures Next.js dashboard errors
+- [ ] /docs/environment-variables.md exists and accurate
+- [ ] V12 migration applied
