@@ -5,6 +5,19 @@ on:
     branches: [main]
     paths:
       - 'dashboard/**'
+      - 'scripts/smoke-test.sh'
+      - '.github/workflows/dashboard.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+      - 'scripts/smoke-test.sh'
+      - '.github/workflows/dashboard.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: dashboard-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -78,7 +91,7 @@ jobs:
 
       - name: Fail on skipped E2E tests
         run: |
-          node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('e2e/results/report.json','utf8')); const skip=(report.stats&&typeof report.stats.skipped==='number')?report.stats.skipped:0; if(skip>0){console.error('E2E skipped tests detected:', skip); process.exit(1);} console.log('No skipped E2E tests detected.');"
+          node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('e2e/results/report.json','utf8')); const skip=(report.stats&&typeof report.stats.skipped==='number')?report.stats.skipped:0; if(skip>0){console.error(`Found ${skip} skipped E2E test(s)`); process.exit(1)}"
         working-directory: dashboard
 
       - name: Stop backend services
@@ -86,6 +99,7 @@ jobs:
         run: docker compose down -v
 
       - name: Deploy to Vercel
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
@@ -94,6 +108,7 @@ jobs:
           working-directory: dashboard
 
   smoke-test:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: deploy
     runs-on: ubuntu-latest
     steps:
