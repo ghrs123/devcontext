@@ -1,0 +1,1 @@
+ALTER TABLE brands ADD COLUMN deleted_at TIMESTAMP;

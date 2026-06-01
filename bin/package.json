@@ -1,0 +1,8 @@
+{
+  "name": "fitvision",
+  "private": true,
+  "description": "FitVision monorepo",
+  "scripts": {
+    "docs": "npx serve . -p 4000"
+  }
+}

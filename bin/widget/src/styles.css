@@ -1,0 +1,226 @@
+.fitvision-container,
+.fitvision-container * {
+	box-sizing: border-box;
+}
+
+.fitvision-container {
+	font-family: inherit;
+	color: #1e2329;
+	width: 100%;
+	min-width: 0;
+	line-height: 1.4;
+}
+
+.fitvision-trigger,
+.fitvision-form-wrapper,
+.fitvision-result,
+.fitvision-error,
+.fitvision-loading {
+	width: 100%;
+	border-radius: 12px;
+}
+
+.fitvision-trigger-button,
+.fitvision-submit-button,
+.fitvision-back-link,
+.fitvision-try-again,
+.fitvision-input {
+	font: inherit;
+}
+
+.fitvision-trigger-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.7rem 1rem;
+	border: 1px solid #20262d;
+	border-radius: 10px;
+	background: #ffffff;
+	color: #1f252d;
+	cursor: pointer;
+	transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.fitvision-trigger-button:hover {
+	background: #f2f5f7;
+	border-color: #11161b;
+}
+
+.fitvision-trigger-button:active {
+	transform: translateY(1px);
+}
+
+.fitvision-form-wrapper,
+.fitvision-result {
+	border: 1px solid #dce3e9;
+	background: #ffffff;
+	padding: 1rem;
+}
+
+.fitvision-form-title,
+.fitvision-result-title {
+	margin: 0 0 0.75rem;
+	font-size: 1.1rem;
+	font-weight: 600;
+	color: #182029;
+}
+
+.fitvision-form {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.fitvision-field {
+	display: grid;
+	gap: 0.35rem;
+}
+
+.fitvision-label {
+	font-size: 0.9rem;
+	font-weight: 500;
+	color: #293340;
+}
+
+.fitvision-input {
+	width: 100%;
+	min-height: 2.5rem;
+	padding: 0.58rem 0.68rem;
+	border: 1px solid #bcc7d2;
+	border-radius: 8px;
+	background: #ffffff;
+	color: #11161b;
+}
+
+.fitvision-input:focus-visible,
+.fitvision-trigger-button:focus-visible,
+.fitvision-submit-button:focus-visible,
+.fitvision-back-link:focus-visible,
+.fitvision-try-again:focus-visible {
+	outline: 3px solid #6ba6d9;
+	outline-offset: 2px;
+}
+
+.fitvision-form-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.85rem;
+	flex-wrap: wrap;
+}
+
+.fitvision-submit-button {
+	padding: 0.65rem 0.95rem;
+	border: 1px solid #151b22;
+	border-radius: 9px;
+	background: #1f252d;
+	color: #ffffff;
+	cursor: pointer;
+}
+
+.fitvision-submit-button:hover {
+	background: #11161b;
+}
+
+.fitvision-back-link,
+.fitvision-try-again {
+	color: #1d5c91;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.fitvision-form-error {
+	margin: 0;
+	min-height: 1.1rem;
+	color: #b11d1d;
+	font-size: 0.9rem;
+}
+
+.fitvision-loading {
+	border: 1px solid #dce3e9;
+	background: #fbfdff;
+	padding: 0.95rem;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.65rem;
+	color: #1d2935;
+}
+
+.fitvision-loading-spinner {
+	width: 1rem;
+	height: 1rem;
+	border-radius: 999px;
+	border: 2px solid #b9c8d6;
+	border-top-color: #2a5d8f;
+	animation: fitvision-spin 900ms linear infinite;
+}
+
+.fitvision-result-size {
+	margin: 0.35rem 0 0.5rem;
+	font-size: clamp(3rem, 7vw, 3.7rem);
+	line-height: 1;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	color: #141920;
+}
+
+.fitvision-result-confidence {
+	display: inline-block;
+	margin: 0 0 0.7rem;
+	padding: 0.28rem 0.55rem;
+	border-radius: 999px;
+	border: 1px solid #b8cbe1;
+	background: #eef5fc;
+	color: #18466f;
+	font-size: 0.83rem;
+	font-weight: 600;
+}
+
+.fitvision-result-message,
+.fitvision-result-api-message,
+.fitvision-error-message {
+	margin: 0 0 0.75rem;
+	color: #212a33;
+}
+
+.fitvision-error {
+	border: 1px solid #efc0c0;
+	background: #fff4f4;
+	padding: 0.95rem;
+}
+
+.fitvision-error-message {
+	color: #8b1c1c;
+}
+
+@keyframes fitvision-spin {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (max-width: 480px) {
+	.fitvision-form-wrapper,
+	.fitvision-result,
+	.fitvision-error,
+	.fitvision-loading {
+		padding: 0.85rem;
+	}
+
+	.fitvision-form-actions {
+		align-items: stretch;
+	}
+
+	.fitvision-submit-button {
+		width: 100%;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fitvision-trigger-button,
+	.fitvision-loading-spinner {
+		transition: none;
+		animation: none;
+	}
+}

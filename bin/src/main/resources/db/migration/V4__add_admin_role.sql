@@ -1,0 +1,2 @@
+ALTER TABLE stores ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'STORE';
+CREATE INDEX idx_stores_role ON stores(role);

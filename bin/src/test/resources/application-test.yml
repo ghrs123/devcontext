@@ -1,0 +1,49 @@
+# Test profile — datasource URL/username/password are overridden at runtime
+# by @DynamicPropertySource in AbstractIntegrationTest (Testcontainers).
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fitvision
+    username: fitvision
+    password: fitvision
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+logging:
+  level:
+    com.fitvision: WARN
+    org.springframework.security: WARN
+    org.flywaydb: WARN
+    org.testcontainers: INFO
+    com.zaxxer.hikari: WARN
+
+stripe:
+  secret-key: sk_test_placeholder_not_used_in_it
+  webhook-secret: whsec_test_placeholder
+  prices:
+    starter: price_test_starter
+    pro: price_test_pro
+    team: price_test_team
+
+fitvision:
+  jwt:
+    secret: "fitvision-test-secret-change-this-in-production-32-bytes-minimum!"
+    expiration-hours: 24
+  shopify:
+    encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    shared-secret: fitvision-shopify-test-secret
