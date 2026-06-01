@@ -18,6 +18,15 @@ jobs:
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: dashboard
+
       - name: Install dependencies
         run: npm ci
         working-directory: dashboard
@@ -27,6 +36,49 @@ jobs:
         working-directory: dashboard
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+      - name: Prepare local backend env for E2E
+        run: |
+          cat > .env << 'EOF'
+          POSTGRES_DB=fitvision
+          POSTGRES_USER=fitvision
+          POSTGRES_PASSWORD=fitvision
+          DB_URL=jdbc:postgresql://fitvision-db:5432/fitvision
+          DB_USERNAME=fitvision
+          DB_PASSWORD=fitvision
+          FITVISION_JWT_SECRET=e2e-ci-secret-key-change-me
+          FITVISION_JWT_EXPIRATION_HOURS=24
+          SHOPIFY_ENCRYPTION_KEY=e2e-ci-shopify-key
+          FITVISION_SHOPIFY_SHARED_SECRET=e2e-ci-shared-secret
+          NEXT_PUBLIC_API_URL=http://localhost:8080
+          EOF
+
+      - name: Start backend services for E2E
+        run: docker compose up -d fitvision-db fitvision-backend
+
+      - name: Wait for backend readiness
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8080/api/health > /dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Backend did not become ready in time"
+          docker compose logs fitvision-backend --tail 200
+          exit 1
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+        working-directory: dashboard
+        env:
+          E2E_API_URL: http://localhost:8080
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+
+      - name: Stop backend services
+        if: always()
+        run: docker compose down -v
 
       - name: Deploy to Vercel
         uses: amondnet/vercel-action@v25
