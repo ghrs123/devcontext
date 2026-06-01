@@ -8,6 +8,22 @@ on:
       - 'pom.xml'
       - 'Dockerfile'
       - 'Dockerfile.dev'
+      - 'scripts/smoke-test.sh'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - 'Dockerfile'
+      - 'Dockerfile.dev'
+      - 'scripts/smoke-test.sh'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -44,6 +60,7 @@ jobs:
           SPRING_PROFILES_ACTIVE: test
 
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -59,8 +76,33 @@ jobs:
         run: mvn -B package -DskipTests
 
       - name: Deploy to Railway
-        uses: bervProject/railway-deploy@v0.1.2-beta
+        uses: bervProject/railway-deploy@main
         with:
           service: fitvision-backend
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  smoke-test:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Run smoke tests
+        run: |
+          chmod +x scripts/smoke-test.sh
+          ./scripts/smoke-test.sh \
+            https://api.fitvision.io \
+            https://app.fitvision.io \
+            https://cdn.fitvision.io/widget/fitvision-widget.min.js
