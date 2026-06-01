@@ -59,7 +59,7 @@ jobs:
         run: mvn -B package -DskipTests
 
       - name: Deploy to Railway
-        uses: bervProject/railway-deploy@v0.1.1
+        uses: bervProject/railway-deploy@main
         with:
           service: fitvision-backend
         env:
