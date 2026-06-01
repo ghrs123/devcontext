@@ -67,6 +67,9 @@ public class ShopifyService {
                 .orElseGet(() -> createStoreForShop(shop, shopName));
 
         store.setShopifyAccessTokenEncrypted(encryptToken(accessToken));
+        if (!"ACTIVE".equals(store.getStatus())) {
+            store.setStatus("ACTIVE");
+        }
         store.setUpdatedAt(LocalDateTime.now());
         Store saved = storeRepository.save(store);
 

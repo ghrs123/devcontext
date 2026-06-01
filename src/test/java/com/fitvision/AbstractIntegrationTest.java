@@ -58,6 +58,15 @@ public abstract class AbstractIntegrationTest {
     protected static final String WIDGET_RECOMMENDATION_URL = "/api/widget/v1/size-recommendation";
     protected static final String ANALYTICS_URL = "/api/dashboard/v1/analytics";
     protected static final String ADMIN_STORES_URL = "/api/admin/v1/stores";
+    protected static final String ADMIN_SEED_URL = "/api/admin/seed";
+    protected static final String ADMIN_METRICS_URL = "/api/admin/v1/metrics";
+    protected static final String ADMIN_BRANDS_URL = "/api/admin/v1/brands";
+    protected static final String BILLING_STATUS_URL = "/api/dashboard/v1/billing/status";
+    protected static final String BILLING_CHECKOUT_URL = "/api/dashboard/v1/billing/checkout";
+    protected static final String STRIPE_WEBHOOK_URL = "/api/billing/webhooks";
+    protected static final String SHOPIFY_CONNECT_URL = "/api/shopify/connect";
+    protected static final String SHOPIFY_STATUS_URL = "/api/shopify/status";
+    protected static final String SHOPIFY_SECRET_HEADER = "X-FitVision-Shopify-Secret";
     protected static final String AUTHORIZATION_HEADER = "Authorization";
     protected static final String BEARER_PREFIX = "Bearer ";
     protected static final String API_KEY_HEADER = "X-FitVision-Key";
@@ -243,6 +252,37 @@ public abstract class AbstractIntegrationTest {
                 .build();
         Store saved = storeRepository.save(admin);
         return jwtService.generateToken(saved.getId(), saved.getEmail(), StoreRole.ADMIN.name());
+    }
+
+    protected void deleteAllAdmins() {
+        List<UUID> adminIds = jdbcTemplate.queryForList(
+                "SELECT id FROM stores WHERE role = 'ADMIN'", UUID.class);
+        for (UUID adminId : adminIds) {
+            cleanupStoreData(adminId);
+        }
+        jdbcTemplate.update("DELETE FROM stores WHERE role = 'ADMIN'");
+    }
+
+    protected void cleanupShopifyStore(UUID storeId) {
+        if (storeId == null) {
+            return;
+        }
+        cleanupStoreData(storeId);
+    }
+
+    protected void cleanupGlobalBrand(UUID brandId) {
+        if (brandId == null) {
+            return;
+        }
+        jdbcTemplate.update(
+                "DELETE FROM size_entries WHERE size_chart_id IN "
+                        + "(SELECT sc.id FROM size_charts sc JOIN products p ON sc.product_id = p.id WHERE p.brand_id = ?)",
+                brandId);
+        jdbcTemplate.update(
+                "DELETE FROM size_charts WHERE product_id IN (SELECT id FROM products WHERE brand_id = ?)",
+                brandId);
+        jdbcTemplate.update("DELETE FROM products WHERE brand_id = ?", brandId);
+        jdbcTemplate.update("DELETE FROM brands WHERE id = ?", brandId);
     }
 
     protected void cleanupStoreData(UUID storeId) {

@@ -33,6 +33,7 @@ logging:
     com.zaxxer.hikari: WARN
 
 stripe:
+  secret-key: sk_test_placeholder_not_used_in_it
   webhook-secret: whsec_test_placeholder
   prices:
     starter: price_test_starter

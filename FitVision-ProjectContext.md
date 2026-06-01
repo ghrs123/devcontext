@@ -670,6 +670,12 @@ docker logs devcontext-fitvision-backend-1 --tail 30
 - Scraping: robots.txt check mandatory, 3s rate limit, failed scrape never overwrites active chart
 - Next migration: V9 (V8 used for scrape_jobs)
 
+## Known Bugs (found during T1.1)
+
+- **Brand-less product recommendation bug**: RecommendationEngine fails when product has no brand — production bug, fix before deploy
+- **Store profile path**: mismatch between spec and actual endpoint path — confirmed and corrected in tests
+- **Widget plan-limit behaviour**: returns HTTP 200 with planLimitFallback (correct) — spec incorrectly said 402
+
 ## Decisions Pending
 - Pricing tiers finalisation
 - Initial brand database (Zara confirmed; H&M, Pull&Bear, Mango planned for Phase 9.3)

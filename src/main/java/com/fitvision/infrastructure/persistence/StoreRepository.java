@@ -46,11 +46,11 @@ public interface StoreRepository extends JpaRepository<Store, UUID> {
 
     Optional<Store> findByStripeSubscriptionId(String stripeSubscriptionId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Store s SET s.recommendationsCountCurrentMonth = s.recommendationsCountCurrentMonth + 1 WHERE s.id = :tenantId")
     void incrementRecommendationCount(@Param("tenantId") UUID tenantId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Store s SET s.recommendationsCountCurrentMonth = 0, s.recommendationsCountResetAt = :resetAt WHERE s.id = :tenantId")
     void resetRecommendationCount(@Param("tenantId") UUID tenantId, @Param("resetAt") LocalDateTime resetAt);
 }
