@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { createTestStore, deleteTestStore, isBillingAvailable, setAuthInPage, type TestStore } from './helpers/api';
+import { createTestStore, deleteTestStore, setAuthInPage, type TestStore } from './helpers/api';
 
 test.describe('Settings', () => {
   let store: TestStore;
@@ -41,7 +41,27 @@ test.describe('Settings', () => {
   });
 
   test('billing section → shows FREE plan', async ({ page }) => {
-    test.skip(!(await isBillingAvailable(store.jwt)), 'Billing API unavailable (GET /billing/status must return 200)');
+    await page.route('**/api/dashboard/v1/billing/status', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            plan: 'FREE',
+            subscriptionStatus: 'inactive',
+            currentPeriodEnd: null,
+            productsUsed: 0,
+            productsLimit: 2,
+            recommendationsUsed: 0,
+            recommendationsLimit: 100,
+          },
+          error: null,
+        }),
+      });
+    });
+
+    await page.reload();
 
     await expect(page.getByText('FREE', { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Plan & Billing')).toBeVisible();

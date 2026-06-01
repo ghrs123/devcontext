@@ -11,7 +11,11 @@ export default defineConfig({
   timeout: 30_000,
   workers: 1,
   outputDir: 'e2e/results',
-  reporter: [['html', { outputFolder: 'playwright-report' }]],
+  reporter: [
+    ['line'],
+    ['json', { outputFile: 'e2e/results/report.json' }],
+    ['html', { outputFolder: 'playwright-report' }],
+  ],
   use: {
     baseURL: 'http://localhost:3000',
     headless: true,

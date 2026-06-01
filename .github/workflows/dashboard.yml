@@ -76,6 +76,11 @@ jobs:
           E2E_API_URL: http://localhost:8080
           NEXT_PUBLIC_API_URL: http://localhost:8080
 
+      - name: Fail on skipped E2E tests
+        run: |
+          node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync('e2e/results/report.json','utf8')); const skip=(report.stats&&typeof report.stats.skipped==='number')?report.stats.skipped:0; if(skip>0){console.error('E2E skipped tests detected:', skip); process.exit(1);} console.log('No skipped E2E tests detected.');"
+        working-directory: dashboard
+
       - name: Stop backend services
         if: always()
         run: docker compose down -v

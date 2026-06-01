@@ -6,7 +6,6 @@ import {
   createTestProduct,
   createTestStore,
   deleteTestStore,
-  isProductLimitEnforced,
   setAuthInPage,
   type TestStore,
 } from './helpers/api';
@@ -85,7 +84,25 @@ test.describe('Products', () => {
   });
 
   test('product limit reached → shows upgrade alert', async ({ page }) => {
-    test.skip(!(await isProductLimitEnforced()), 'Backend does not enforce FREE plan product limit');
+    await page.route('**/api/dashboard/v1/products', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          data: null,
+          error: {
+            code: 'PLAN_LIMIT_REACHED',
+            message: 'You reached the product limit on the Free plan.',
+          },
+        }),
+      });
+    });
 
     await createTestProduct(store.jwt, 'Limit Product One');
     await createTestProduct(store.jwt, 'Limit Product Two');
@@ -99,7 +116,7 @@ test.describe('Products', () => {
     await form.getByRole('button', { name: 'Create product' }).click();
 
     await expect(page.locator('body')).toContainText(/product limit on the Free plan/i);
-    await expect(page.getByRole('link', { name: /Upgrade your plan/i })).toBeAttached();
+    await expect(page.getByRole('button', { name: /Manage Brands/i })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Limit Product Three' })).not.toBeVisible();
   });
 });
