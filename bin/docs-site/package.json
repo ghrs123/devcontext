@@ -1,8 +1,0 @@
-{
-  "name": "fitvision-docs-site",
-  "private": true,
-  "description": "Static HTML viewer for FitVision documentation",
-  "scripts": {
-    "docs": "npx serve .. -p 4000"
-  }
-}
