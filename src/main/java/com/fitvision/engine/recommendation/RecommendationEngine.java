@@ -1,28 +1,29 @@
 package com.fitvision.engine.recommendation;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.fitvision.domain.billing.PlanLimitsService;
 import com.fitvision.domain.brand.Brand;
 import com.fitvision.domain.product.Product;
 import com.fitvision.domain.recommendation.Gender;
 import com.fitvision.domain.recommendation.RecommendationRequest;
 import com.fitvision.domain.sizechart.SizeChart;
 import com.fitvision.domain.sizechart.SizeEntry;
-import com.fitvision.domain.billing.PlanLimitsService;
 import com.fitvision.infrastructure.persistence.BrandRepository;
 import com.fitvision.infrastructure.persistence.ProductRepository;
 import com.fitvision.infrastructure.persistence.RecommendationRequestRepository;
 import com.fitvision.infrastructure.persistence.SizeChartRepository;
 import com.fitvision.infrastructure.persistence.SizeEntryRepository;
 import com.fitvision.shared.exception.ProductNotFoundException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Orchestrates the full size-recommendation flow.
@@ -122,9 +123,9 @@ public class RecommendationEngine {
             resolvedProductId = product.getId();
 
             String productName = product.getName();
-            String brandName = brandRepository.findById(product.getBrandId())
-                    .map(Brand::getName)
-                    .orElse(null);
+            String brandName = product.getBrandId() != null
+                    ? brandRepository.findById(product.getBrandId()).map(Brand::getName).orElse(null)
+                    : null;
 
             // Step 3: Find active size chart — graceful fallback if absent (no exception).
             Optional<SizeChart> sizeChartOpt = sizeChartRepository
