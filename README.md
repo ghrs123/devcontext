@@ -10,7 +10,7 @@ Multi-tenant SaaS for clothing size recommendations. See [CLAUDE.md](CLAUDE.md) 
 2. Copy the connection string (format: `postgresql://user:password@host/dbname?sslmode=require`).
 3. Flyway runs on startup; all migrations in `src/main/resources/db/migration/` apply to a fresh database.
 
-The app converts Neon’s `postgresql://` URL to `jdbc:postgresql://` automatically when `SPRING_PROFILES_ACTIVE=prod`. You can also set `JDBC_DATABASE_URL` manually if you prefer.
+The app converts Neon’s `postgresql://` (or `postgres://`) URL to `jdbc:postgresql://` automatically when `SPRING_PROFILES_ACTIVE=prod` (`NeonDatabaseUrlEnvironmentPostProcessor`), preserving the `?sslmode=require` query string. If you already have a `jdbc:`-prefixed URL it is passed through unchanged. The `prod` profile reads `DATABASE_URL`, falling back to `DB_URL`.
 
 ### 2. Build (optional for local Docker image)
 
@@ -31,18 +31,22 @@ Local full stack development still uses `docker compose` with `Dockerfile.dev`.
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | Neon connection string (`postgresql://...`) |
-| `JWT_SECRET` | Random string, at least 32 bytes |
-| `SHOPIFY_ENCRYPTION_KEY` | Base64-encoded 32-byte AES key |
-| `SHOPIFY_SHARED_SECRET` | Shared secret with the Shopify app |
-| `STRIPE_SECRET_KEY` | Stripe live secret key (`sk_live_...`) |
+| `DATABASE_URL` (or `DB_URL`) | Neon connection string, full, including `?sslmode=require` |
+| `JWT_SECRET` (or `FITVISION_JWT_SECRET`) | Random string, at least 32 bytes |
+| `SHOPIFY_ENCRYPTION_KEY` | Base64-encoded 32-byte AES key (`openssl rand -base64 32`) — validated at boot |
+| `SHOPIFY_SHARED_SECRET` (or `FITVISION_SHOPIFY_SHARED_SECRET`) | Shared secret with the Shopify app — must match the Node service exactly |
+| `STRIPE_SECRET_KEY` | Stripe secret key — `sk_test_...` for a test deploy, `sk_live_...` for production |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret (`whsec_...`) |
-| `STRIPE_PRICE_STARTER` | Stripe Price ID for Starter |
-| `STRIPE_PRICE_PRO` | Stripe Price ID for Pro |
-| `STRIPE_PRICE_TEAM` | Stripe Price ID for Team |
-| `SPRING_PROFILES_ACTIVE` | `prod` |
+| `STRIPE_PRICE_STARTER` / `_PRO` / `_TEAM` | Stripe recurring Price IDs — must be **three distinct non-empty values** or the app fails to start |
+| `SENTRY_DSN` | Required key; set to an empty string to disable Sentry |
+| `SPRING_PROFILES_ACTIVE` | `prod` (also hardcoded in the Docker entrypoint) |
+| `ADMIN_BOOTSTRAP_TOKEN` | Optional — required only to call `POST /api/admin/seed` |
+| `DB_HEALTH_DOWN_MS` / `DB_HEALTH_SLOW_MS` | Optional — `/actuator/health` DB probe thresholds in ms (defaults 2000 / 100) |
 
 Railway sets `PORT` automatically; the `prod` profile binds the server to `${PORT:8080}`.
+
+The `prod` profile requires every variable above without a YAML default. A missing one fails context
+startup with `Could not resolve placeholder`.
 
 ### 4. CORS (production)
 
@@ -56,8 +60,11 @@ With `prod` active, dashboard, admin, and Shopify API routes allow:
 
 ### 5. Health check
 
-- URL: `/actuator/health`
-- Actuator exposes only `health` and `info`; health details are hidden.
+- URL: `/actuator/health` (public, no auth). Actuator exposes only `health` and `info`; details are hidden.
+- The custom `DatabaseHealthIndicator` runs `SELECT 1` and reports `DOWN` if it exceeds
+  `DB_HEALTH_DOWN_MS` (default 2000 ms). Neon with autosuspend enabled can cold-start slower than
+  that — keep Neon in the same region as Railway, disable autosuspend, or raise `DB_HEALTH_DOWN_MS`.
+  `railway.toml` gives the health check a 120 s timeout to cover build + Flyway on a fresh database.
 
 ### 6. Verify deploy
 
@@ -66,6 +73,27 @@ curl https://<your-railway-domain>/actuator/health
 ```
 
 Expect HTTP 200 with `"status":"UP"`.
+
+## Shopify app (Node/Express) — Railway
+
+The `shopify-app/` service is deployed separately. It has no Dockerfile; deploy it on Railway with
+**Root Directory = `shopify-app`** (Nixpacks detects `package.json` and runs `node src/index.js`).
+
+| Variable | Description |
+|----------|-------------|
+| `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` | From the Shopify Partners app (a development app is enough for testing) |
+| `HOST_NAME` | Public URL of this Railway service, e.g. `https://fitvision-shopify.up.railway.app` |
+| `FITVISION_API_URL` | Public URL of the backend Railway service |
+| `FITVISION_SHOPIFY_SHARED_SECRET` | Must equal the backend's `SHOPIFY_SHARED_SECRET` |
+| `FITVISION_ADMIN_EMAIL` / `FITVISION_ADMIN_PASSWORD` | Seeded admin credentials (used on app uninstall) |
+| `SESSION_SECRET` | Random string |
+| `NODE_ENV` | `production` (enables the `secure` session cookie) |
+
+In the Shopify Partners dashboard register **App URL** `https://<host>` and **Allowed redirection URL**
+`https://<host>/auth/callback`; scopes `read_products`, `write_script_tags`.
+
+> **Known limitation:** `shopify-app/src/store.js` keeps shop→JWT credentials in an in-memory `Map`.
+> Run a single instance; the map is lost on every restart/redeploy and shops must re-authenticate.
 
 ## Widget CDN (Cloudflare R2)
 

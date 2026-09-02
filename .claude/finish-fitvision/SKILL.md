@@ -10,13 +10,15 @@ FitVision is a multi-tenant SaaS for clothing size recommendations (Shopify App 
 ## Current verified state (update this section as milestones complete)
 
 - ✅ `mvn compile` — clean build, no errors
-- ✅ `mvn test` — 45/45 unit tests passing (recommendation engine, body profile calculator, size chart matcher, CSV/Excel parsers)
-- ⬜ `mvn verify` — integration tests (Testcontainers/Docker) — NOT yet run. Must confirm `BillingFlowIT`, `ShopifyWebhookIT`, `StoreRegistrationFlowIT` pass before trusting the Shopify/Stripe integration.
-- ⬜ Deployed to a real environment (Railway + Neon, per README) — not yet deployed
+- ✅ `mvn test` — unit tests passing (recommendation engine, body profile calculator, size chart matcher, CSV/Excel parsers, DatabaseHealthIndicator)
+- ✅ `mvn verify` — 75/75 passing (unit + Testcontainers integration incl. `BillingFlowIT`, `ShopifyWebhookIT`, `StoreRegistrationFlowIT`). Milestone 1 done.
+- 🔄 Deployed to a real environment (Railway + Neon + Stripe TEST keys, per README) — **milestone 2, in progress**
 - ⬜ Installed on a Shopify dev store — not yet tested end to end
 - ⬜ Widget confirmed working against a real store's products
 - ⬜ First scraper (start with Zara) confirmed importing a real size chart
 - ⬜ Submitted to Shopify App Store
+- ✅ Bloqueadores de código para deploy (health check, env vars) — corrigidos, com teste
+
 
 ## The only goal right now: first paying store
 

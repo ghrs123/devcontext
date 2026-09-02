@@ -48,6 +48,8 @@ npm install
 npm run dev     # dev server at http://localhost:3000
 npm run build
 npm run lint
+npm run test:e2e          # Playwright e2e (see dashboard/e2e/)
+npm run test:e2e -- --grep "login"   # run a subset by title
 ```
 
 ## Widget Commands (Vite)
@@ -76,13 +78,15 @@ Copy `.env.example` to `.env` before running Docker. The `.env` file is loaded b
 
 The Shopify app has its own `.env` in `/shopify-app/` with `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `HOST_NAME`, `FITVISION_API_URL`, and `FITVISION_SHOPIFY_SHARED_SECRET`.
 
+Production: backend deploys on Railway (root `Dockerfile`, `railway.toml`, health check `/actuator/health`) against Neon PostgreSQL. Under `SPRING_PROFILES_ACTIVE=prod` the app rewrites Neon's `postgresql://` URL to JDBC automatically. Prod-only vars include `DATABASE_URL`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*`. See `README.md` for the full list.
+
 ## Admin Account
 
 The admin account can only be created via the seed script (never via `/auth/register`):
 ```bash
-./scripts/create-admin.sh admin@fitvision.io password
+./scripts/create-admin.sh <email> <password> <bootstrap-token> [base-url]
 ```
-This calls `POST /api/admin/seed` which returns 409 if any admin already exists.
+This calls `POST /api/admin/seed` with an `X-Bootstrap-Token` header; it returns 409 if any admin already exists.
 
 ## Backend Architecture
 
@@ -98,10 +102,12 @@ Controller → Service → Engine       (recommendation logic)
   - `api/dashboard/` — store owner endpoints (JWT auth)
   - `api/admin/` — admin endpoints (JWT + ADMIN role)
   - `api/shopify/` — Shopify OAuth/webhook endpoints (shared secret)
+  - `api/billing/` — Stripe webhook (`StripeWebhookController`); `api/dashboard/billing/` — store-owner subscription status/checkout
 - **`domain/`** — JPA entities, domain services, and repositories interfaces by domain concept
 - **`engine/recommendation/`** — stateless computation: `BodyProfileCalculator`, `SizeChartMatcher`, `RecommendationEngine` (no DB access in engine classes)
 - **`infrastructure/`** — cross-cutting: security filters, persistence repositories, file parsers
 - **`integration/scraper/`** — Playwright-based brand scrapers (`BrandScraper` interface, `BrandScraperRegistry`, `ScraperService`)
+- **`domain/billing/`** — `StripeService`; subscription/plan fields live on the `Store` entity (V9 migration)
 - **`shared/`** — `ApiResponse<T>` envelope, `GlobalExceptionHandler`, `ErrorCode` enum
 
 ### Multi-Tenancy
@@ -142,7 +148,7 @@ Use `ApiResponse.ok(data)` and `ApiResponse.error(ErrorCode.X, message)`.
 
 ### Database Migrations
 
-Flyway runs automatically on startup. Migrations are in `src/main/resources/db/migration/`. Next migration is **V9** (V8 was the last: `scrape_jobs` table + `scrape_source_url`/`last_scraped_at` on `size_charts`).
+Flyway runs automatically on startup. Migrations are in `src/main/resources/db/migration/`. Last applied is **V10** (`recommendation_duration_ms`); V8 = `scrape_jobs` table, V9 = billing fields. Next migration is **V11**.
 
 ### Scraping Pipeline
 
@@ -165,6 +171,14 @@ Token is stored in `localStorage` + mirrored to a cookie (`fitvision_token`) for
 Integration tests extend `AbstractIntegrationTest` which starts a shared singleton Testcontainers PostgreSQL 16 instance. Test class naming: `{ClassName}Test` for unit tests (plain JUnit 5 + Mockito, no Spring context), `{ClassName}IT` for integration tests.
 
 The `TestDataBuilder` utility in `src/test/java/com/fitvision/testutil/` builds test fixtures.
+
+Dashboard e2e tests live in `dashboard/e2e/` (Playwright, config in `dashboard/playwright.config.ts`).
+
+## Additional Docs
+
+`docs/` holds detailed design docs (Portuguese): architecture (`03`), data model (`05`), security/multi-tenancy (`11`), GDPR (`12`), testing (`15`), env config (`14`), roadmap (`18`). `docs/19-guia-para-novo-developer.md` is the new-developer onboarding guide. `docs-site/` is a static browser for these docs (`npm run docs` at repo root, serves on :4000).
+
+The `fitvision-invariant-reviewer` subagent (`.claude/agents/`) checks a diff against the Key Invariants below — run it before committing changes touching `domain/`, `infrastructure/security/`, `api/widget/`, or `api/dashboard/`.
 
 ## Key Invariants
 

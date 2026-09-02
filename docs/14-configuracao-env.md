@@ -63,15 +63,18 @@
 
 | Propriedade | Env var | Notas |
 |-------------|---------|-------|
-| `spring.datasource.url` | `DATABASE_URL` | Railway Postgres |
+| `spring.datasource.url` | `DATABASE_URL` \| `DB_URL` | Neon; `postgresql://`/`postgres://` convertido para `jdbc:` no arranque |
 | `server.port` | `PORT` | Default 8080 |
-| `fitvision.jwt.secret` | `JWT_SECRET` | **Nome diferente do .env.example** |
-| `fitvision.shopify.encryption-key` | `SHOPIFY_ENCRYPTION_KEY` | |
-| `fitvision.shopify.shared-secret` | `SHOPIFY_SHARED_SECRET` | **Nome diferente: sem prefixo FITVISION_** |
+| `fitvision.jwt.secret` | `JWT_SECRET` \| `FITVISION_JWT_SECRET` | ≥ 32 bytes; fail-fast no boot |
+| `fitvision.shopify.encryption-key` | `SHOPIFY_ENCRYPTION_KEY` | Base64 → 32 bytes exatos; fail-fast no boot |
+| `fitvision.shopify.shared-secret` | `SHOPIFY_SHARED_SECRET` \| `FITVISION_SHOPIFY_SHARED_SECRET` | tem de igualar o `shopify-app` |
+| `fitvision.health.db.down-threshold-ms` | `DB_HEALTH_DOWN_MS` | default 2000; limiar do `/actuator/health` |
+| `fitvision.health.db.slow-threshold-ms` | `DB_HEALTH_SLOW_MS` | default 100 |
 | `fitvision.dashboard.url` | (valor fixo prod no ficheiro) | `https://app.fitvision.io` |
 | `fitvision.admin.bootstrap-token` | `ADMIN_BOOTSTRAP_TOKEN` | obrigatório para usar `/api/admin/seed` |
-| `stripe.*` | `STRIPE_*` | Obrigatório billing prod |
-| `sentry.dsn` | `SENTRY_DSN` | |
+| `stripe.secret-key` / `webhook-secret` | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | sem default — obrigatório no boot |
+| `stripe.prices.*` | `STRIPE_PRICE_STARTER` / `_PRO` / `_TEAM` | 3 valores não-vazios e **distintos** ou o contexto não arranca |
+| `sentry.dsn` | `SENTRY_DSN` | chave obrigatória; valor vazio desliga o Sentry |
 | `sentry.release` | `APP_VERSION` | |
 | `logging.level.com.fitvision` | — | INFO |
 
@@ -132,11 +135,14 @@
 
 | Conceito | Dev (.env.example) | Prod (application-prod.yml) |
 |----------|-------------------|-------------------------------|
-| JWT secret | `FITVISION_JWT_SECRET` | `JWT_SECRET` |
-| Shopify shared | `FITVISION_SHOPIFY_SHARED_SECRET` | `SHOPIFY_SHARED_SECRET` |
-| Database | `DB_URL` | `DATABASE_URL` |
+| JWT secret | `FITVISION_JWT_SECRET` | `JWT_SECRET`, fallback `FITVISION_JWT_SECRET` |
+| Shopify shared | `FITVISION_SHOPIFY_SHARED_SECRET` | `SHOPIFY_SHARED_SECRET`, fallback `FITVISION_SHOPIFY_SHARED_SECRET` |
+| Database | `DB_URL` | `DATABASE_URL`, fallback `DB_URL` |
 
-**Risco:** deploy incorrecto se nomes não mapeados na plataforma (Railway env vars).
+Desde o deploy Railway+Neon, o profile `prod` aceita **ambos** os nomes (placeholder com fallback),
+por isso podes usar o conjunto `FITVISION_*` / `DB_URL` — igual ao `.env.example` e ao `shopify-app` —
+em todos os serviços. O `shopify-app` (Node) só conhece `FITVISION_SHOPIFY_SHARED_SECRET`; o valor tem
+de ser idêntico ao do backend.
 
 ---
 
