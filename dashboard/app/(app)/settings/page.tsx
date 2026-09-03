@@ -365,7 +365,9 @@ function SettingsPageContent() {
             </CardContent>
           </Card>
 
-          <BillingSection />
+          <div id="billing" className="scroll-mt-20">
+            <BillingSection />
+          </div>
 
           <Card>
             <CardHeader>

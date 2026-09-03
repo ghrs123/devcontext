@@ -12,10 +12,10 @@ import type { BillingStatusResponse } from '@/lib/types';
 type Plan = BillingStatusResponse['plan'];
 
 const STATUS_BADGE: Record<string, string> = {
-  active:   'bg-emerald-100 text-emerald-700',
-  inactive: 'bg-slate-100 text-slate-600',
-  past_due: 'bg-amber-100 text-amber-700',
-  canceled: 'bg-rose-100 text-rose-700',
+  active:   'bg-success-soft text-success',
+  inactive: 'bg-muted text-muted-foreground',
+  past_due: 'bg-warning-soft text-warning',
+  canceled: 'bg-danger-soft text-danger',
 };
 
 export function BillingSection() {
@@ -58,7 +58,7 @@ export function BillingSection() {
     );
   }
 
-  const statusClass = STATUS_BADGE[billing.subscriptionStatus] ?? 'bg-slate-100 text-slate-600';
+  const statusClass = STATUS_BADGE[billing.subscriptionStatus] ?? 'bg-muted text-muted-foreground';
   const isPaid = billing.plan !== 'FREE';
 
   return (
