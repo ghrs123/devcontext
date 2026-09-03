@@ -10,10 +10,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { api, ApiError } from '@/lib/api';
 import { saveToken } from '@/lib/auth';
 import { getRoleFromToken } from '@/lib/jwt';
+import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 type Platform = 'shopify' | 'woocommerce' | 'other';
 
@@ -38,12 +39,7 @@ export default function RegisterPage() {
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      name: '',
-      email: '',
-      password: '',
-      platform: 'shopify'
-    }
+    defaultValues: { name: '', email: '', password: '', platform: 'shopify' }
   });
 
   async function onSubmit(values: RegisterFormValues) {
@@ -54,102 +50,115 @@ export default function RegisterPage() {
       const role = getRoleFromToken(response.accessToken);
       router.push(role === 'ADMIN' ? '/admin/dashboard' : '/dashboard');
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'Registration failed. Please try again.';
+      const message =
+        error instanceof ApiError ? error.message : 'Registration failed. Please try again.';
       setSubmitError(message);
     }
   }
 
+  const platform = form.watch('platform');
+
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Create account</CardTitle>
-          <CardDescription>Start managing your FitVision products and analytics.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Store name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="My Fashion Store" autoComplete="organization" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+    <AuthShell
+      title="Create your store account"
+      subtitle="Set up size recommendations for your catalogue in minutes."
+      footer={
+        <>
+          Already have an account?{' '}
+          <Link href="/login" className="font-medium text-primary hover:underline">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Store name</FormLabel>
+                <FormControl>
+                  <Input placeholder="Aurora Apparel" autoComplete="organization" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="store@example.com" type="email" autoComplete="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input placeholder="you@store.com" type="email" autoComplete="email" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input placeholder="********" type="password" autoComplete="new-password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Password</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="At least 8 characters"
+                    type="password"
+                    autoComplete="new-password"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="platform"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Platform</FormLabel>
-                    <FormControl>
-                      <select
-                        className="flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        {...field}
+          <FormField
+            control={form.control}
+            name="platform"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Platform</FormLabel>
+                <FormControl>
+                  <div className="grid grid-cols-3 gap-2">
+                    {platformOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => field.onChange(option.value)}
+                        className={cn(
+                          'rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                          platform === option.value
+                            ? 'border-primary bg-primary-soft text-primary-soft-foreground'
+                            : 'border-border-strong bg-card text-muted-foreground hover:bg-muted'
+                        )}
                       >
-                        {platformOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
+          {submitError ? (
+            <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">{submitError}</p>
+          ) : null}
 
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Creating account...' : 'Create account'}
-              </Button>
-            </form>
-          </Form>
-
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            Already have an account?{' '}
-            <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
-              Login
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+          <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? 'Creating account…' : 'Create account'}
+          </Button>
+        </form>
+      </Form>
+    </AuthShell>
   );
 }

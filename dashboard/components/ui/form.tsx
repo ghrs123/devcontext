@@ -43,7 +43,7 @@ const FormLabel = React.forwardRef<HTMLLabelElement, React.ComponentPropsWithout
     const fieldContext = React.useContext(FormFieldContext);
     const error = fieldContext.name ? formState.errors[fieldContext.name] : undefined;
 
-    return <Label ref={ref} className={cn(error && 'text-red-600', className)} {...props} />;
+    return <Label ref={ref} className={cn(error && 'text-danger', className)} {...props} />;
   }
 );
 FormLabel.displayName = 'FormLabel';
@@ -65,7 +65,7 @@ const FormMessage = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<
     }
 
     return (
-      <p ref={ref} className={cn('text-sm font-medium text-red-600', className)} {...props}>
+      <p ref={ref} className={cn('text-sm font-medium text-danger', className)} {...props}>
         {String(body)}
       </p>
     );

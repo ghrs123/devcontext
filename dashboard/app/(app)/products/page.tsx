@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Edit3, FileUp, Plus, Search, Trash2 } from 'luc
 
 import { ProductForm } from '@/components/app/ProductForm';
 import { SizeChartUpload } from '@/components/app/SizeChartUpload';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api';
@@ -87,49 +88,52 @@ export default function ProductsPage() {
     );
   } else {
     tableContent = (
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
+      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
         <table className="w-full min-w-[960px] text-sm">
-          <thead className="bg-muted/50 text-left text-muted-foreground">
+          <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">External ID</th>
-              <th className="px-4 py-3 font-medium">Category</th>
-              <th className="px-4 py-3 font-medium">Gender</th>
-              <th className="px-4 py-3 font-medium">Brand</th>
-              <th className="px-4 py-3 font-medium">Size Chart</th>
-              <th className="px-4 py-3 font-medium">Actions</th>
+              <th className="px-4 py-3 font-semibold">Product</th>
+              <th className="px-4 py-3 font-semibold">External ID</th>
+              <th className="px-4 py-3 font-semibold">Category</th>
+              <th className="px-4 py-3 font-semibold">Gender</th>
+              <th className="px-4 py-3 font-semibold">Brand</th>
+              <th className="px-4 py-3 font-semibold">Size chart</th>
+              <th className="px-4 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border">
             {filteredProducts.map((product) => (
-              <tr key={product.id} className="border-t border-border/70">
+              <tr key={product.id} className="transition-colors hover:bg-muted/40">
                 <td className="px-4 py-3 font-medium">{product.name}</td>
-                <td className="px-4 py-3">{product.externalProductId}</td>
-                <td className="px-4 py-3">{product.category || '-'}</td>
-                <td className="px-4 py-3">{product.genderTarget || '-'}</td>
-                <td className="px-4 py-3">{product.brandName || '-'}</td>
+                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{product.externalProductId}</td>
+                <td className="px-4 py-3 text-muted-foreground">{product.category || '—'}</td>
+                <td className="px-4 py-3 text-muted-foreground">{product.genderTarget || '—'}</td>
+                <td className="px-4 py-3 text-muted-foreground">{product.brandName || '—'}</td>
                 <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                      product.hasSizeChart ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                    }`}
-                  >
-                    {product.hasSizeChart ? '✓' : '✗'}
-                  </span>
+                  {product.hasSizeChart ? (
+                    <Badge variant="success">Ready</Badge>
+                  ) : (
+                    <Badge variant="warning">Missing</Badge>
+                  )}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Button type="button" size="sm" variant="outline" onClick={() => openEdit(product)}>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(product)}>
                       <Edit3 className="mr-1 h-3.5 w-3.5" />
                       Edit
                     </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => openUpload(product)}>
+                    <Button type="button" size="sm" variant="secondary" onClick={() => openUpload(product)}>
                       <FileUp className="mr-1 h-3.5 w-3.5" />
-                      Upload Size Chart
+                      Size chart
                     </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setDeleteTarget(product)}>
-                      <Trash2 className="mr-1 h-3.5 w-3.5" />
-                      Delete
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-danger hover:bg-danger-soft"
+                      onClick={() => setDeleteTarget(product)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </td>
@@ -241,16 +245,18 @@ export default function ProductsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl space-y-5">
+    <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Products</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Manage products and upload size charts.</p>
+          <h2 className="text-xl font-semibold tracking-tight">Products</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Match products to your store catalogue and give each one a size chart.
+          </p>
         </div>
 
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Product
+          Add product
         </Button>
       </div>
 
@@ -450,6 +456,6 @@ export default function ProductsPage() {
           </div>
         </div>
       ) : null}
-    </main>
+    </div>
   );
 }

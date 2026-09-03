@@ -1,39 +1,38 @@
 'use client';
 
+import Link from 'next/link';
 import useSWR from 'swr';
+import { Activity, CalendarClock, Layers, Sparkles } from 'lucide-react';
 
 import { QualityChart } from '@/components/app/QualityChart';
 import { StatCard } from '@/components/app/StatCard';
 import { TopProductsTable } from '@/components/app/TopProductsTable';
+import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 
 const REVALIDATE_MS = 60000;
 
 function confidenceTone(score: number): 'good' | 'warn' | 'bad' {
   const percent = score * 100;
-  if (percent >= 80) {
-    return 'good';
-  }
-  if (percent >= 50) {
-    return 'warn';
-  }
+  if (percent >= 80) return 'good';
+  if (percent >= 50) return 'warn';
   return 'bad';
 }
 
 function DashboardSkeleton() {
   return (
-    <main className="mx-auto max-w-7xl space-y-6">
-      <div className="h-8 w-56 animate-pulse rounded-md bg-muted" />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-32 animate-pulse rounded-xl border border-border bg-card" />
+    <div className="space-y-6">
+      <div className="h-7 w-48 animate-pulse rounded-md bg-muted" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-32 animate-pulse rounded-lg border border-border bg-card" />
         ))}
       </div>
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_1fr]">
-        <div className="h-[26rem] animate-pulse rounded-xl border border-border bg-card" />
-        <div className="h-[26rem] animate-pulse rounded-xl border border-border bg-card" />
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+        <div className="h-72 animate-pulse rounded-lg border border-border bg-card" />
+        <div className="h-72 animate-pulse rounded-lg border border-border bg-card" />
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -42,7 +41,6 @@ export default function DashboardPage() {
     refreshInterval: REVALIDATE_MS,
     revalidateOnFocus: true
   });
-
   const { data: products, isLoading: loadingProducts } = useSWR('products', api.getProducts, {
     refreshInterval: REVALIDATE_MS,
     revalidateOnFocus: true
@@ -55,72 +53,100 @@ export default function DashboardPage() {
   const totalRecommendations = summary.totalRecommendations ?? 0;
   const last30Days = summary.recommendationsLast30Days ?? 0;
   const previous30Days = Math.max(totalRecommendations - last30Days, 0);
-  const trend = previous30Days > 0 ? ((last30Days - previous30Days) / previous30Days) * 100 : null;
-  let trendSubtitle = 'Trend unavailable for previous period';
-  let trendTone: 'default' | 'good' | 'warn' = 'default';
-  if (trend !== null) {
-    const trendPrefix = trend >= 0 ? '+' : '';
-    trendSubtitle = `${trendPrefix}${trend.toFixed(1)}% vs previous 30 days`;
-    trendTone = trend >= 0 ? 'good' : 'warn';
-  }
+  const trend =
+    previous30Days > 0 ? ((last30Days - previous30Days) / previous30Days) * 100 : null;
 
-  const productsWithChart = products.filter((product) => product.hasSizeChart).length;
+  const productsWithChart = products.filter((p) => p.hasSizeChart).length;
   const coverage = products.length > 0 ? (productsWithChart / products.length) * 100 : 0;
   let coverageTone: 'good' | 'warn' | 'bad' = 'bad';
-  if (coverage >= 80) {
-    coverageTone = 'good';
-  } else if (coverage >= 50) {
-    coverageTone = 'warn';
-  }
+  if (coverage >= 80) coverageTone = 'good';
+  else if (coverage >= 50) coverageTone = 'warn';
+
   const avgConfidence = summary.averageConfidenceScore ?? 0;
 
   if (totalRecommendations === 0) {
     return (
-      <main className="mx-auto max-w-7xl space-y-6">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <section className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted text-2xl">📊</div>
-          <h2 className="text-lg font-semibold">No recommendations yet.</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Add a product and upload a size chart to get started.
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Welcome to FitVision</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Two steps to your first size recommendation.
           </p>
-        </section>
-      </main>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-8">
+          <ol className="space-y-5">
+            {[
+              { n: 1, t: 'Add a product', d: 'Match it to a product in your store by its external ID.' },
+              { n: 2, t: 'Upload a size chart', d: 'Chest / waist / hip / height ranges per size — CSV, Excel, or manual.' }
+            ].map((step) => (
+              <li key={step.n} className="flex gap-4">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary-soft-foreground">
+                  {step.n}
+                </span>
+                <div>
+                  <p className="text-sm font-medium">{step.t}</p>
+                  <p className="text-sm text-muted-foreground">{step.d}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-7">
+            <Button asChild>
+              <Link href="/products">Add your first product</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Overview of recommendations and product performance.</p>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Overview</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Recommendation activity and size-chart coverage across your catalogue.
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" asChild>
+          <Link href="/products">Manage products</Link>
+        </Button>
       </div>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Total Recommendations" value={totalRecommendations.toLocaleString()} />
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Last 30 Days"
-          value={last30Days.toLocaleString()}
-          subtitle={trendSubtitle}
-          tone={trendTone}
+          title="Total recommendations"
+          value={totalRecommendations.toLocaleString()}
+          icon={Sparkles}
         />
         <StatCard
-          title="Average Confidence"
-          value={`${(avgConfidence * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`}
+          title="Last 30 days"
+          value={last30Days.toLocaleString()}
+          icon={CalendarClock}
+          delta={trend !== null ? { value: trend } : null}
+          subtitle={trend === null ? 'no prior period' : 'vs previous 30 days'}
+        />
+        <StatCard
+          title="Average confidence"
+          value={`${(avgConfidence * 100).toFixed(1)}%`}
+          icon={Activity}
           tone={confidenceTone(avgConfidence)}
         />
         <StatCard
-          title="Size Chart Coverage"
-          value={`${coverage.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`}
-          subtitle={`${productsWithChart.toLocaleString()} of ${products.length.toLocaleString()} products`}
+          title="Size-chart coverage"
+          value={`${coverage.toFixed(0)}%`}
+          icon={Layers}
           tone={coverageTone}
+          subtitle={`${productsWithChart} of ${products.length} products`}
         />
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_1fr]">
+      <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
         <QualityChart distribution={summary.qualityDistribution || {}} />
         <TopProductsTable products={summary.topProducts || []} />
       </section>
-    </main>
+    </div>
   );
 }

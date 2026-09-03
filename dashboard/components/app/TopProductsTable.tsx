@@ -1,51 +1,69 @@
 import Link from 'next/link';
+import { ArrowUpRight } from 'lucide-react';
 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { ProductRecommendationStat } from '@/lib/types';
 
 type TopProductsTableProps = {
   products: ProductRecommendationStat[];
 };
 
-export function TopProductsTable({ products }: Readonly<TopProductsTableProps>) {
-  return (
-    <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Top Products</h2>
-        <span className="text-xs text-muted-foreground">Top 5 by recommendations</span>
-      </div>
+function confidenceColor(score: number) {
+  if (score >= 0.8) return 'hsl(var(--chart-3))';
+  if (score >= 0.5) return 'hsl(var(--chart-4))';
+  return 'hsl(var(--danger))';
+}
 
-      {products.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          No top products yet.
-        </p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Product name</th>
-                <th className="py-2 pr-3 font-medium">Recommendations</th>
-                <th className="py-2 pr-3 font-medium">Avg confidence</th>
-                <th className="py-2 font-medium">Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.slice(0, 5).map((product) => (
-                <tr key={product.productId} className="border-b border-border/70">
-                  <td className="py-3 pr-3 font-medium">{product.productName}</td>
-                  <td className="py-3 pr-3">{product.recommendationCount.toLocaleString()}</td>
-                  <td className="py-3 pr-3">{(product.averageConfidence * 100).toFixed(1)}%</td>
-                  <td className="py-3">
-                    <Link href={`/products/${product.productId}`} className="text-primary underline-offset-4 hover:underline">
-                      Open
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+export function TopProductsTable({ products }: Readonly<TopProductsTableProps>) {
+  const top = products.slice(0, 5);
+  const max = Math.max(1, ...top.map((p) => p.recommendationCount));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Top products</CardTitle>
+        <CardDescription>Ranked by recommendations served.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {top.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+            No product activity yet.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {top.map((product) => (
+              <li key={product.productId} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/products/${product.productId}`}
+                    className="flex items-center gap-1 truncate text-sm font-medium hover:text-primary"
+                  >
+                    {product.productName}
+                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </Link>
+                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary/70"
+                      style={{ width: `${(product.recommendationCount / max) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-semibold tabular-nums">
+                    {product.recommendationCount.toLocaleString()}
+                  </p>
+                  <p
+                    className="text-xs font-medium tabular-nums"
+                    style={{ color: confidenceColor(product.averageConfidence) }}
+                  >
+                    {(product.averageConfidence * 100).toFixed(0)}% conf.
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }

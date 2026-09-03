@@ -195,11 +195,11 @@ function SettingsPageContent() {
   }
 
   return (
-      <main className="mx-auto max-w-7xl">
-        <h1 className="text-2xl font-semibold">Settings</h1>
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight">Settings</h2>
 
-        <p className="mt-2 text-sm text-muted-foreground">
-          Manage your profile, API credentials, and widget integration.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage your profile, API credentials, billing, and widget integration.
         </p>
 
         <section className="mt-6 grid gap-6">
@@ -433,6 +433,6 @@ function SettingsPageContent() {
             </CardContent>
           </Card>
         </section>
-      </main>
+      </div>
   );
 }
