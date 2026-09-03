@@ -51,12 +51,10 @@ export default function SettingsPage() {
 
 function SettingsPageLoading() {
   return (
-      <main className="mx-auto max-w-7xl">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading settings...
-        </div>
-      </main>
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      …
+    </div>
   );
 }
 
@@ -205,16 +203,16 @@ function SettingsPageContent() {
         <section className="mt-6 grid gap-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">Store Profile</CardTitle>
+              <CardTitle className="text-lg">{t('settings.profile.title')}</CardTitle>
               <CardDescription>
-                Keep your store information up to date.
+                {t('settings.profile.desc')}
               </CardDescription>
             </CardHeader>
 
             <CardContent>
               <form className="grid gap-4" onSubmit={handleSaveProfile}>
                 <div className="grid gap-2">
-                  <Label htmlFor="store-name">Name</Label>
+                  <Label htmlFor="store-name">{t('settings.profile.name')}</Label>
                   <Input
                       id="store-name"
                       value={name}
@@ -224,7 +222,7 @@ function SettingsPageContent() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="store-email">Email</Label>
+                  <Label htmlFor="store-email">{t('settings.profile.email')}</Label>
                   <Input
                       id="store-email"
                       value={profile?.email || ''}
@@ -234,7 +232,7 @@ function SettingsPageContent() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="store-platform">Platform</Label>
+                  <Label htmlFor="store-platform">{t('settings.profile.platform')}</Label>
 
                   <select
                       id="store-platform"
@@ -255,7 +253,7 @@ function SettingsPageContent() {
                     {isSavingProfile ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : null}
-                    Save profile
+                    {t('settings.profile.save')}
                   </Button>
                 </div>
               </form>
@@ -264,7 +262,7 @@ function SettingsPageContent() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">API Keys</CardTitle>
+              <CardTitle className="text-lg">{t('settings.apiKeys.title')}</CardTitle>
               <CardDescription>
                 Regenerating keys will immediately invalidate the current
                 widget installation.
@@ -372,7 +370,7 @@ function SettingsPageContent() {
           <Card>
             <CardHeader>
               <CardTitle className="text-xl">
-                Widget Integration Guide
+                {t('settings.widget.title')}
               </CardTitle>
 
               <CardDescription>

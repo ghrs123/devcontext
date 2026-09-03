@@ -1,5 +1,7 @@
 'use client';
 
+import { useT } from '@/lib/i18n/I18nProvider';
+
 import useSWR from 'swr';
 
 import { PlatformMetrics } from '@/components/admin/PlatformMetrics';
@@ -8,6 +10,7 @@ import { api } from '@/lib/api';
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 
 export default function AdminDashboardPage() {
+  const t = useT();
   const { metrics, isChecking } = useAdminGuard();
 
   const { data: recommendations, isLoading: loadingRecommendations } = useSWR(
@@ -26,8 +29,8 @@ export default function AdminDashboardPage() {
   return (
     <main className="mx-auto max-w-7xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Platform Overview</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Cross-tenant metrics and latest activity.</p>
+        <h1 className="text-2xl font-semibold">{t('admin.overview.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('admin.overview.subtitle')}</p>
       </div>
 
       <PlatformMetrics metrics={metrics} />

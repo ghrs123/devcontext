@@ -1,5 +1,7 @@
 'use client';
 
+import { useT } from '@/lib/i18n/I18nProvider';
+
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
@@ -20,6 +22,7 @@ const EMPTY_PAGE: SpringPage<StoreAdminView> = {
 };
 
 export default function AdminStoresPage() {
+  const t = useT();
   useAdminGuard();
 
   const [page, setPage] = useState(0);
@@ -92,8 +95,8 @@ export default function AdminStoresPage() {
   return (
     <main className="mx-auto max-w-7xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Stores</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Manage tenant access and inspect store-level health.</p>
+        <h1 className="text-2xl font-semibold">{t('admin.stores.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('admin.stores.subtitle')}</p>
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center">

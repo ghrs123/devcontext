@@ -1,5 +1,7 @@
 'use client';
 
+import { useT } from '@/lib/i18n/I18nProvider';
+
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
@@ -8,6 +10,7 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { api } from '@/lib/api';
 
 export default function AdminRecommendationsPage() {
+  const t = useT();
   useAdminGuard();
 
   const [page, setPage] = useState(0);
@@ -44,8 +47,8 @@ export default function AdminRecommendationsPage() {
   return (
     <main className="mx-auto max-w-7xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Recommendations Log</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Platform-wide recommendation events with filters.</p>
+        <h1 className="text-2xl font-semibold">{t('admin.recommendations.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('admin.recommendations.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-2 xl:grid-cols-4">

@@ -164,7 +164,7 @@ export default function ProductsPage() {
         setIsPlanLimitError(true);
         setError(err.message);
       } else {
-        setError(err instanceof ApiError ? err.message : 'Unable to save product.');
+        setError(err instanceof ApiError ? err.message : t('error.saveProduct'));
       }
     }
   }
@@ -181,7 +181,7 @@ export default function ProductsPage() {
       await mutateProducts();
       setDeleteTarget(null);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Unable to delete product.';
+      const message = err instanceof ApiError ? err.message : t('error.deleteProduct');
       setError(message);
     } finally {
       setDeleteLoading(false);
@@ -224,7 +224,7 @@ export default function ProductsPage() {
       await Promise.all([mutateBrands(), mutateProducts()]);
       setDeleteBrandTarget(null);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Unable to delete brand.';
+      const message = err instanceof ApiError ? err.message : t('error.deleteBrand');
       setError(message);
     } finally {
       setDeleteBrandLoading(false);
@@ -275,7 +275,7 @@ export default function ProductsPage() {
           {error}
           {isPlanLimitError && (
             <a href="/settings#billing" className="ml-2 font-medium underline">
-              Upgrade your plan →
+              {t('error.upgradePlan')}
             </a>
           )}
         </div>
@@ -378,7 +378,7 @@ export default function ProductsPage() {
           <button className="absolute inset-0 bg-slate-950/35" onClick={() => setFormOpen(false)} aria-label="Close product form" />
           <aside className="absolute right-0 top-0 h-full w-full max-w-lg overflow-y-auto border-l border-border bg-background p-5 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">{editingProduct ? 'Edit Product' : 'Add Product'}</h2>
+              <h2 className="text-xl font-semibold">{editingProduct ? t('productForm.editTitle') : t('productForm.addTitle')}</h2>
               <Button variant="outline" onClick={() => setFormOpen(false)}>
                 Close
               </Button>
@@ -413,7 +413,7 @@ export default function ProductsPage() {
           <button className="absolute inset-0 bg-slate-950/35" onClick={() => setDeleteTarget(null)} aria-label="Close delete dialog" />
 
           <div className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-lg">
-            <h3 className="text-lg font-semibold">Delete product?</h3>
+            <h3 className="text-lg font-semibold">{t('delete.product.title')}</h3>
             <p className="mt-2 text-sm text-muted-foreground">
               This will soft-delete <span className="font-medium text-foreground">{deleteTarget.name}</span> and hide it from your product list.
             </p>
@@ -439,7 +439,7 @@ export default function ProductsPage() {
           />
 
           <div className="relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-lg">
-            <h3 className="text-lg font-semibold">Delete brand?</h3>
+            <h3 className="text-lg font-semibold">{t('delete.brand.title')}</h3>
             <p className="mt-2 text-sm text-muted-foreground">
               This will soft-delete <span className="font-medium text-foreground">{deleteBrandTarget.name}</span>. Any linked
               products will become brandless.

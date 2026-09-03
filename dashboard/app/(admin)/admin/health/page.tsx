@@ -1,5 +1,7 @@
 'use client';
 
+import { useT } from '@/lib/i18n/I18nProvider';
+
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 
@@ -12,6 +14,7 @@ import { useAdminGuard } from '@/hooks/useAdminGuard';
 const REFRESH_INTERVAL_MS = 30_000;
 
 export default function AdminHealthPage() {
+  const t = useT();
   const { isChecking } = useAdminGuard();
   const [secondsSinceUpdate, setSecondsSinceUpdate] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number>(Date.now());
@@ -55,10 +58,8 @@ export default function AdminHealthPage() {
     <main className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">System Health</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Platform status, recommendation performance, and scrape pipeline.
-          </p>
+          <h1 className="text-2xl font-semibold">{t('admin.health.title')}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t('admin.health.subtitle')}</p>
         </div>
         <p className="text-xs text-muted-foreground">
           Last updated: {secondsSinceUpdate}s ago · auto-refresh every 30s
