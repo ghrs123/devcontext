@@ -63,6 +63,12 @@ FitVision is a multi-tenant SaaS for clothing size recommendations (Shopify App 
     datacenter Playwright. Needs a real size-guide JSON source + anti-bot infra (proxies /
     scraping API) + a per-brand source URL. See spawned task "Build a working brand
     size-chart scraper". Also: each scrape trigger leaves an orphan PENDING job row.
+- ✅ Store-owner dashboard (Next.js) walked end to end + redesigned
+  - Verified against the local stack: login → overview (stat cards, match-quality donut, top
+    products) → products (table, brands, size-chart upload) → settings.
+  - Redesigned with a real design system (indigo brand ramp, warm neutrals, Inter, semantic
+    tokens, light+dark), branded split-screen auth, branded app shell; fixed the match-quality
+    chart which never rendered. `tsc` clean, Docker image builds.
 - ⬜ Submitted to Shopify App Store
 - ✅ Bloqueadores de código para deploy (health check, env vars) — corrigidos, com teste
 
