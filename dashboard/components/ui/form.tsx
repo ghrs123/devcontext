@@ -10,6 +10,8 @@ import {
 
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { useT } from '@/lib/i18n/I18nProvider';
+import type { TranslationKey } from '@/lib/i18n/dictionaries';
 
 const Form = FormProvider;
 
@@ -55,18 +57,23 @@ FormControl.displayName = 'FormControl';
 
 const FormMessage = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, children, ...props }, ref) => {
+    const t = useT();
     const { getFieldState, formState } = useFormContext();
     const fieldContext = React.useContext(FormFieldContext);
     const fieldState = fieldContext.name ? getFieldState(fieldContext.name, formState) : undefined;
-    const body = fieldState?.error?.message ?? children;
+    const raw = fieldState?.error?.message ?? children;
 
-    if (!body) {
+    if (!raw) {
       return null;
     }
 
+    // Validation messages are stored as translation keys; t() returns the key
+    // unchanged when it isn't one, so plain strings pass through.
+    const body = typeof raw === 'string' ? t(raw as TranslationKey) : String(raw);
+
     return (
       <p ref={ref} className={cn('text-sm font-medium text-danger', className)} {...props}>
-        {String(body)}
+        {body}
       </p>
     );
   }

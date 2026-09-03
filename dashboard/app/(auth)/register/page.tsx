@@ -14,27 +14,27 @@ import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { cn } from '@/lib/utils';
 
-type Platform = 'shopify' | 'woocommerce' | 'other';
-
 const schema = z.object({
-  name: z.string().min(2, 'Store name is required.'),
-  email: z.string().email('Please enter a valid email.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.'),
+  name: z.string().min(2, 'auth.validation.storeName'),
+  email: z.string().email('auth.validation.email'),
+  password: z.string().min(8, 'auth.validation.password'),
   platform: z.enum(['shopify', 'woocommerce', 'other'])
 });
 
 type RegisterFormValues = z.infer<typeof schema>;
 
-const platformOptions: Array<{ value: Platform; label: string }> = [
+const platformOptions = [
   { value: 'shopify', label: 'Shopify' },
   { value: 'woocommerce', label: 'WooCommerce' },
-  { value: 'other', label: 'Other' }
-];
+  { value: 'other', label: 'Outra / Other' }
+] as const;
 
 export default function RegisterPage() {
   const router = useRouter();
+  const t = useT();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useForm<RegisterFormValues>({
@@ -50,9 +50,7 @@ export default function RegisterPage() {
       const role = getRoleFromToken(response.accessToken);
       router.push(role === 'ADMIN' ? '/admin/dashboard' : '/dashboard');
     } catch (error) {
-      const message =
-        error instanceof ApiError ? error.message : 'Registration failed. Please try again.';
-      setSubmitError(message);
+      setSubmitError(error instanceof ApiError ? error.message : t('auth.register.failed'));
     }
   }
 
@@ -60,13 +58,13 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
-      title="Create your store account"
-      subtitle="Set up size recommendations for your catalogue in minutes."
+      title={t('auth.register.title')}
+      subtitle={t('auth.register.subtitle')}
       footer={
         <>
-          Already have an account?{' '}
+          {t('auth.register.hasAccount')}{' '}
           <Link href="/login" className="font-medium text-primary hover:underline">
-            Sign in
+            {t('auth.register.signIn')}
           </Link>
         </>
       }
@@ -78,9 +76,13 @@ export default function RegisterPage() {
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Store name</FormLabel>
+                <FormLabel>{t('auth.field.storeName')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="Aurora Apparel" autoComplete="organization" {...field} />
+                  <Input
+                    placeholder={t('auth.placeholder.storeName')}
+                    autoComplete="organization"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -92,9 +94,14 @@ export default function RegisterPage() {
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>{t('auth.field.email')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="you@store.com" type="email" autoComplete="email" {...field} />
+                  <Input
+                    placeholder={t('auth.placeholder.email')}
+                    type="email"
+                    autoComplete="email"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -106,10 +113,10 @@ export default function RegisterPage() {
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Password</FormLabel>
+                <FormLabel>{t('auth.field.password')}</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="At least 8 characters"
+                    placeholder={t('auth.placeholder.password')}
                     type="password"
                     autoComplete="new-password"
                     {...field}
@@ -125,7 +132,7 @@ export default function RegisterPage() {
             name="platform"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Platform</FormLabel>
+                <FormLabel>{t('auth.field.platform')}</FormLabel>
                 <FormControl>
                   <div className="grid grid-cols-3 gap-2">
                     {platformOptions.map((option) => (
@@ -155,7 +162,7 @@ export default function RegisterPage() {
           ) : null}
 
           <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Creating account…' : 'Create account'}
+            {form.formState.isSubmitting ? t('auth.register.submitting') : t('auth.register.submit')}
           </Button>
         </form>
       </Form>

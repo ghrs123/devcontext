@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n/I18nProvider';
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
@@ -23,6 +24,7 @@ function Meta({ label, value }: { label: string; value: string }) {
 }
 
 export default function ProductDetailPage() {
+  const t = useT();
   const params = useParams<{ productId: string }>();
   const productId = params.productId;
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -45,13 +47,13 @@ export default function ProductDetailPage() {
     return (
       <div className="space-y-4">
         <Link href="/products" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" /> Back to products
+          <ArrowLeft className="h-4 w-4" /> {t('product.back')}
         </Link>
         <Card>
           <CardContent className="py-10 text-center">
-            <p className="text-sm font-medium">Product not found</p>
+            <p className="text-sm font-medium">{t('product.notFound')}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              It may have been deleted, or the link is out of date.
+              {t('product.notFoundDesc')}
             </p>
           </CardContent>
         </Card>
@@ -65,7 +67,7 @@ export default function ProductDetailPage() {
         href="/products"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" /> Back to products
+        <ArrowLeft className="h-4 w-4" /> {t('product.back')}
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -75,29 +77,29 @@ export default function ProductDetailPage() {
         </div>
         <Button variant="secondary" onClick={() => setUploadOpen(true)}>
           <FileUp className="mr-2 h-4 w-4" />
-          {product.hasSizeChart ? 'Replace size chart' : 'Upload size chart'}
+          {product.hasSizeChart ? t('product.replaceChart') : t('product.uploadChart')}
         </Button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>Details</CardTitle>
+            <CardTitle>{t('product.details')}</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-2 gap-4">
-              <Meta label="Category" value={product.category || '—'} />
-              <Meta label="Gender" value={product.genderTarget || '—'} />
-              <Meta label="Brand" value={product.brandName || '—'} />
+              <Meta label={t('products.col.category')} value={product.category || '—'} />
+              <Meta label={t('products.col.gender')} value={product.genderTarget || '—'} />
+              <Meta label={t('products.col.brand')} value={product.brandName || '—'} />
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Size chart
+                  {t('products.col.sizeChart')}
                 </dt>
                 <dd className="mt-1">
                   {product.hasSizeChart ? (
-                    <Badge variant="success">Ready</Badge>
+                    <Badge variant="success">{t('products.badge.ready')}</Badge>
                   ) : (
-                    <Badge variant="warning">Missing</Badge>
+                    <Badge variant="warning">{t('products.badge.missing')}</Badge>
                   )}
                 </dd>
               </div>
@@ -108,9 +110,9 @@ export default function ProductDetailPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> Recommendations
+              <Sparkles className="h-4 w-4 text-primary" /> {t('product.recommendations')}
             </CardTitle>
-            <CardDescription>Served for this product.</CardDescription>
+            <CardDescription>{t('product.recServed')}</CardDescription>
           </CardHeader>
           <CardContent>
             {stat ? (
@@ -119,17 +121,17 @@ export default function ProductDetailPage() {
                   <p className="text-2xl font-semibold tabular-nums">
                     {stat.recommendationCount.toLocaleString()}
                   </p>
-                  <p className="text-xs text-muted-foreground">total recommendations</p>
+                  <p className="text-xs text-muted-foreground">{t('product.totalRec')}</p>
                 </div>
                 <div>
                   <p className="text-lg font-semibold tabular-nums">
                     {(stat.averageConfidence * 100).toFixed(0)}%
                   </p>
-                  <p className="text-xs text-muted-foreground">average confidence</p>
+                  <p className="text-xs text-muted-foreground">{t('product.avgConf')}</p>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No recommendations yet.</p>
+              <p className="text-sm text-muted-foreground">{t('product.noRec')}</p>
             )}
           </CardContent>
         </Card>
@@ -137,9 +139,9 @@ export default function ProductDetailPage() {
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Ruler className="h-4 w-4 text-primary" /> Widget snippet
+              <Ruler className="h-4 w-4 text-primary" /> {t('product.snippet')}
             </CardTitle>
-            <CardDescription>Mount point for this product.</CardDescription>
+            <CardDescription>{t('product.snippetDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             <pre className="overflow-x-auto rounded-md bg-subtle p-3 text-[0.7rem] leading-relaxed text-muted-foreground">
@@ -149,9 +151,9 @@ export default function ProductDetailPage() {
 </div>`}
             </pre>
             <p className="mt-2 text-xs text-muted-foreground">
-              Find your public key in{' '}
+              {t('product.findKey')}{' '}
               <Link href="/settings" className="text-primary hover:underline">
-                Settings
+                {t('nav.settings')}
               </Link>
               .
             </p>
@@ -161,8 +163,8 @@ export default function ProductDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Size chart</CardTitle>
-          <CardDescription>Active measurement ranges (cm) used to match buyers.</CardDescription>
+          <CardTitle>{t('product.sizeChart')}</CardTitle>
+          <CardDescription>{t('product.sizeChartDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <SizeChartTable entries={entries || []} />

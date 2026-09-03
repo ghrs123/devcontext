@@ -9,6 +9,7 @@ import { SizeChartUpload } from '@/components/app/SizeChartUpload';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { api, ApiError } from '@/lib/api';
 import type { Brand, Product, ProductRequest } from '@/lib/types';
 
@@ -23,6 +24,7 @@ function slugPreview(value: string): string {
 }
 
 export default function ProductsPage() {
+  const t = useT();
   const [search, setSearch] = useState('');
   const [brandsOpen, setBrandsOpen] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -82,8 +84,8 @@ export default function ProductsPage() {
     tableContent = <div className="h-40 animate-pulse rounded-xl border border-border bg-card" />;
   } else if (filteredProducts.length === 0) {
     tableContent = (
-      <section className="rounded-xl border border-dashed border-border bg-card p-8 text-center">
-        <p className="text-lg font-medium">No products yet. Add your first product.</p>
+      <section className="rounded-lg border border-dashed border-border bg-card p-8 text-center">
+        <p className="text-sm font-medium text-muted-foreground">{t('products.empty')}</p>
       </section>
     );
   } else {
@@ -92,13 +94,13 @@ export default function ProductsPage() {
         <table className="w-full min-w-[960px] text-sm">
           <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="px-4 py-3 font-semibold">Product</th>
-              <th className="px-4 py-3 font-semibold">External ID</th>
-              <th className="px-4 py-3 font-semibold">Category</th>
-              <th className="px-4 py-3 font-semibold">Gender</th>
-              <th className="px-4 py-3 font-semibold">Brand</th>
-              <th className="px-4 py-3 font-semibold">Size chart</th>
-              <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              <th className="px-4 py-3 font-semibold">{t('products.col.product')}</th>
+              <th className="px-4 py-3 font-semibold">{t('products.col.externalId')}</th>
+              <th className="px-4 py-3 font-semibold">{t('products.col.category')}</th>
+              <th className="px-4 py-3 font-semibold">{t('products.col.gender')}</th>
+              <th className="px-4 py-3 font-semibold">{t('products.col.brand')}</th>
+              <th className="px-4 py-3 font-semibold">{t('products.col.sizeChart')}</th>
+              <th className="px-4 py-3 text-right font-semibold">{t('products.col.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -111,20 +113,20 @@ export default function ProductsPage() {
                 <td className="px-4 py-3 text-muted-foreground">{product.brandName || '—'}</td>
                 <td className="px-4 py-3">
                   {product.hasSizeChart ? (
-                    <Badge variant="success">Ready</Badge>
+                    <Badge variant="success">{t('products.badge.ready')}</Badge>
                   ) : (
-                    <Badge variant="warning">Missing</Badge>
+                    <Badge variant="warning">{t('products.badge.missing')}</Badge>
                   )}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1.5">
                     <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(product)}>
                       <Edit3 className="mr-1 h-3.5 w-3.5" />
-                      Edit
+                      {t('common.edit')}
                     </Button>
                     <Button type="button" size="sm" variant="secondary" onClick={() => openUpload(product)}>
                       <FileUp className="mr-1 h-3.5 w-3.5" />
-                      Size chart
+                      {t('products.action.sizeChart')}
                     </Button>
                     <Button
                       type="button"
@@ -248,15 +250,13 @@ export default function ProductsPage() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Products</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Match products to your store catalogue and give each one a size chart.
-          </p>
+          <h2 className="text-xl font-semibold tracking-tight">{t('products.title')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('products.subtitle')}</p>
         </div>
 
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          Add product
+          {t('products.add')}
         </Button>
       </div>
 
@@ -265,7 +265,7 @@ export default function ProductsPage() {
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by product name"
+          placeholder={t('products.search')}
           className="pl-9"
         />
       </div>
@@ -288,8 +288,8 @@ export default function ProductsPage() {
           className="flex w-full items-center justify-between px-4 py-3 text-left"
         >
           <div>
-            <h2 className="text-base font-semibold">Manage Brands</h2>
-            <p className="text-sm text-muted-foreground">Create tenant brands and review global brands.</p>
+            <h2 className="text-base font-semibold">{t('products.brands.title')}</h2>
+            <p className="text-sm text-muted-foreground">{t('products.brands.subtitle')}</p>
           </div>
           {brandsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>

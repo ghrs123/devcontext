@@ -22,13 +22,14 @@
   --border: 224 22% 90%;
   --border-strong: 224 18% 82%;
 
-  /* Brand — indigo */
-  --primary: 243 68% 56%;
-  --primary-hover: 243 62% 49%;
+  /* Brand — FitVision royal blue (#2865ea) with a cyan accent (#18b7d4) */
+  --primary: 222 82% 54%;
+  --primary-hover: 222 76% 46%;
   --primary-foreground: 0 0% 100%;
-  --primary-soft: 243 100% 97%;
-  --primary-soft-foreground: 243 55% 42%;
-  --ring: 243 68% 62%;
+  --primary-soft: 222 100% 96%;
+  --primary-soft-foreground: 222 72% 42%;
+  --ring: 222 82% 60%;
+  --accent: 189 78% 46%;
 
   /* Data / semantic */
   --success: 158 64% 38%;
@@ -40,11 +41,11 @@
   --info: 215 82% 52%;
 
   /* Chart series */
-  --chart-1: 243 68% 56%;
-  --chart-2: 199 82% 48%;
+  --chart-1: 222 82% 54%;
+  --chart-2: 189 78% 46%;
   --chart-3: 158 58% 42%;
   --chart-4: 32 88% 52%;
-  --chart-5: 280 55% 58%;
+  --chart-5: 255 60% 60%;
 
   --radius: 0.75rem;
 
@@ -71,12 +72,13 @@
     --border: 224 20% 20%;
     --border-strong: 224 16% 28%;
 
-    --primary: 243 80% 68%;
-    --primary-hover: 243 80% 74%;
+    --primary: 218 90% 66%;
+    --primary-hover: 218 90% 72%;
     --primary-foreground: 224 40% 10%;
-    --primary-soft: 243 45% 20%;
-    --primary-soft-foreground: 243 90% 86%;
-    --ring: 243 80% 70%;
+    --primary-soft: 220 55% 20%;
+    --primary-soft-foreground: 218 95% 85%;
+    --ring: 218 90% 68%;
+    --accent: 189 70% 52%;
 
     --success: 158 60% 48%;
     --success-soft: 158 40% 16%;

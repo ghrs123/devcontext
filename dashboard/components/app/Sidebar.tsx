@@ -4,10 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BarChart3, Package, Settings, X } from 'lucide-react';
 
-import { Wordmark } from '@/components/brand/Logo';
+import { LogoMark } from '@/components/brand/Logo';
+import { LanguageSwitcher } from '@/components/app/LanguageSwitcher';
 import { Badge } from '@/components/ui/badge';
+import { useT } from '@/lib/i18n/I18nProvider';
 import { cn } from '@/lib/utils';
 import type { StoreProfile } from '@/lib/types';
+import type { TranslationKey } from '@/lib/i18n/dictionaries';
 
 type SidebarProps = {
   mobileOpen: boolean;
@@ -15,10 +18,10 @@ type SidebarProps = {
   profile?: StoreProfile;
 };
 
-const NAV = [
-  { href: '/dashboard', label: 'Overview', icon: BarChart3 },
-  { href: '/products', label: 'Products', icon: Package },
-  { href: '/settings', label: 'Settings', icon: Settings }
+const NAV: Array<{ href: string; key: TranslationKey; icon: typeof BarChart3 }> = [
+  { href: '/dashboard', key: 'nav.overview', icon: BarChart3 },
+  { href: '/products', key: 'nav.products', icon: Package },
+  { href: '/settings', key: 'nav.settings', icon: Settings }
 ];
 
 function planVariant(plan?: string) {
@@ -34,6 +37,7 @@ function planVariant(plan?: string) {
 
 export function Sidebar({ mobileOpen, onClose, profile }: Readonly<SidebarProps>) {
   const pathname = usePathname();
+  const t = useT();
 
   return (
     <>
@@ -53,7 +57,10 @@ export function Sidebar({ mobileOpen, onClose, profile }: Readonly<SidebarProps>
         )}
       >
         <div className="flex h-16 items-center justify-between px-5">
-          <Wordmark />
+          <span className="inline-flex items-center gap-2">
+            <LogoMark className="h-6 w-6" />
+            <span className="text-[0.975rem] font-semibold tracking-tight">FitVision</span>
+          </span>
           <button
             type="button"
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted lg:hidden"
@@ -66,7 +73,7 @@ export function Sidebar({ mobileOpen, onClose, profile }: Readonly<SidebarProps>
 
         <nav className="flex-1 space-y-0.5 px-3 py-4">
           <p className="px-3 pb-2 text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground">
-            Store
+            {t('nav.group.store')}
           </p>
           {NAV.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -83,28 +90,30 @@ export function Sidebar({ mobileOpen, onClose, profile }: Readonly<SidebarProps>
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
-                <Icon
-                  className={cn('h-4 w-4', active ? 'text-primary' : 'text-muted-foreground/80')}
-                />
-                {item.label}
+                <Icon className={cn('h-4 w-4', active ? 'text-primary' : 'text-muted-foreground/80')} />
+                {t(item.key)}
               </Link>
             );
           })}
         </nav>
 
-        <div className="border-t border-border p-3">
+        <div className="space-y-3 border-t border-border p-3">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('nav.language')}
+            </span>
+            <LanguageSwitcher />
+          </div>
+
           <div className="rounded-lg border border-border bg-card p-3">
-            <p className="truncate text-sm font-medium">{profile?.name || 'Your store'}</p>
+            <p className="truncate text-sm font-medium">{profile?.name || t('nav.yourStore')}</p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile?.email || ''}</p>
             <div className="mt-2 flex items-center gap-2">
-              <Badge variant={planVariant(profile?.plan)} className="capitalize">
-                {(profile?.plan || 'free').toLowerCase()} plan
+              <Badge variant={planVariant(profile?.plan)}>
+                {t('nav.plan', { plan: (profile?.plan || 'FREE').toLowerCase() })}
               </Badge>
-              <Link
-                href="/settings#billing"
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                Manage
+              <Link href="/settings#billing" className="text-xs font-medium text-primary hover:underline">
+                {t('common.manage')}
               </Link>
             </div>
           </div>

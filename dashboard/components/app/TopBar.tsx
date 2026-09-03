@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 
 type TopBarProps = {
   title: string;
+  signOutLabel: string;
   onMenuToggle: () => void;
   onLogout: () => void;
 };
 
-export function TopBar({ title, onMenuToggle, onLogout }: TopBarProps) {
+export function TopBar({ title, signOutLabel, onMenuToggle, onLogout }: TopBarProps) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
       <div className="flex items-center gap-3">
@@ -27,7 +28,7 @@ export function TopBar({ title, onMenuToggle, onLogout }: TopBarProps) {
 
       <Button variant="ghost" size="sm" onClick={onLogout}>
         <LogOut className="mr-2 h-4 w-4" />
-        Sign out
+        {signOutLabel}
       </Button>
     </header>
   );

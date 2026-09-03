@@ -9,6 +9,7 @@ import { StatCard } from '@/components/app/StatCard';
 import { TopProductsTable } from '@/components/app/TopProductsTable';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n/I18nProvider';
 
 const REVALIDATE_MS = 60000;
 
@@ -37,6 +38,7 @@ function DashboardSkeleton() {
 }
 
 export default function DashboardPage() {
+  const t = useT();
   const { data: summary, isLoading: loadingSummary } = useSWR('analytics-summary', api.getAnalyticsSummary, {
     refreshInterval: REVALIDATE_MS,
     revalidateOnFocus: true
@@ -53,8 +55,7 @@ export default function DashboardPage() {
   const totalRecommendations = summary.totalRecommendations ?? 0;
   const last30Days = summary.recommendationsLast30Days ?? 0;
   const previous30Days = Math.max(totalRecommendations - last30Days, 0);
-  const trend =
-    previous30Days > 0 ? ((last30Days - previous30Days) / previous30Days) * 100 : null;
+  const trend = previous30Days > 0 ? ((last30Days - previous30Days) / previous30Days) * 100 : null;
 
   const productsWithChart = products.filter((p) => p.hasSizeChart).length;
   const coverage = products.length > 0 ? (productsWithChart / products.length) * 100 : 0;
@@ -68,24 +69,22 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Welcome to FitVision</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Two steps to your first size recommendation.
-          </p>
+          <h2 className="text-xl font-semibold tracking-tight">{t('overview.welcome')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('overview.welcomeSub')}</p>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-8">
           <ol className="space-y-5">
             {[
-              { n: 1, t: 'Add a product', d: 'Match it to a product in your store by its external ID.' },
-              { n: 2, t: 'Upload a size chart', d: 'Chest / waist / hip / height ranges per size — CSV, Excel, or manual.' }
+              { n: 1, tt: t('overview.step1Title'), d: t('overview.step1Desc') },
+              { n: 2, tt: t('overview.step2Title'), d: t('overview.step2Desc') }
             ].map((step) => (
               <li key={step.n} className="flex gap-4">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary-soft-foreground">
                   {step.n}
                 </span>
                 <div>
-                  <p className="text-sm font-medium">{step.t}</p>
+                  <p className="text-sm font-medium">{step.tt}</p>
                   <p className="text-sm text-muted-foreground">{step.d}</p>
                 </div>
               </li>
@@ -93,7 +92,7 @@ export default function DashboardPage() {
           </ol>
           <div className="mt-7">
             <Button asChild>
-              <Link href="/products">Add your first product</Link>
+              <Link href="/products">{t('overview.addFirstProduct')}</Link>
             </Button>
           </div>
         </div>
@@ -105,41 +104,35 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Overview</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Recommendation activity and size-chart coverage across your catalogue.
-          </p>
+          <h2 className="text-xl font-semibold tracking-tight">{t('overview.title')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('overview.subtitle')}</p>
         </div>
         <Button variant="secondary" size="sm" asChild>
-          <Link href="/products">Manage products</Link>
+          <Link href="/products">{t('overview.manageProducts')}</Link>
         </Button>
       </div>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title={t('overview.stat.total')} value={totalRecommendations.toLocaleString()} icon={Sparkles} />
         <StatCard
-          title="Total recommendations"
-          value={totalRecommendations.toLocaleString()}
-          icon={Sparkles}
-        />
-        <StatCard
-          title="Last 30 days"
+          title={t('overview.stat.last30')}
           value={last30Days.toLocaleString()}
           icon={CalendarClock}
           delta={trend !== null ? { value: trend } : null}
-          subtitle={trend === null ? 'no prior period' : 'vs previous 30 days'}
+          subtitle={trend === null ? t('overview.stat.noPrev') : t('overview.stat.vsPrev')}
         />
         <StatCard
-          title="Average confidence"
+          title={t('overview.stat.confidence')}
           value={`${(avgConfidence * 100).toFixed(1)}%`}
           icon={Activity}
           tone={confidenceTone(avgConfidence)}
         />
         <StatCard
-          title="Size-chart coverage"
+          title={t('overview.stat.coverage')}
           value={`${coverage.toFixed(0)}%`}
           icon={Layers}
           tone={coverageTone}
-          subtitle={`${productsWithChart} of ${products.length} products`}
+          subtitle={t('overview.stat.ofProducts', { withChart: productsWithChart, total: products.length })}
         />
       </section>
 

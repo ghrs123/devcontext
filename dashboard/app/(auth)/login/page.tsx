@@ -14,16 +14,18 @@ import { AuthShell } from '@/components/auth/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useT } from '@/lib/i18n/I18nProvider';
 
 const schema = z.object({
-  email: z.string().email('Please enter a valid email.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.')
+  email: z.string().email('auth.validation.email'),
+  password: z.string().min(8, 'auth.validation.password')
 });
 
 type LoginFormValues = z.infer<typeof schema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const t = useT();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useForm<LoginFormValues>({
@@ -39,20 +41,19 @@ export default function LoginPage() {
       const role = getRoleFromToken(response.accessToken);
       router.push(role === 'ADMIN' ? '/admin/dashboard' : '/dashboard');
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'Login failed. Please try again.';
-      setSubmitError(message);
+      setSubmitError(error instanceof ApiError ? error.message : t('auth.login.failed'));
     }
   }
 
   return (
     <AuthShell
-      title="Sign in to your dashboard"
-      subtitle="Manage products, size charts, and recommendation analytics."
+      title={t('auth.login.title')}
+      subtitle={t('auth.login.subtitle')}
       footer={
         <>
-          New to FitVision?{' '}
+          {t('auth.login.noAccount')}{' '}
           <Link href="/register" className="font-medium text-primary hover:underline">
-            Create an account
+            {t('auth.login.createAccount')}
           </Link>
         </>
       }
@@ -64,9 +65,14 @@ export default function LoginPage() {
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>{t('auth.field.email')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="you@store.com" type="email" autoComplete="email" {...field} />
+                  <Input
+                    placeholder={t('auth.placeholder.email')}
+                    type="email"
+                    autoComplete="email"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -78,7 +84,7 @@ export default function LoginPage() {
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Password</FormLabel>
+                <FormLabel>{t('auth.field.password')}</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="••••••••"
@@ -97,7 +103,7 @@ export default function LoginPage() {
           ) : null}
 
           <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
+            {form.formState.isSubmitting ? t('auth.login.submitting') : t('auth.login.submit')}
           </Button>
         </form>
       </Form>

@@ -1,7 +1,10 @@
+'use client';
+
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useT } from '@/lib/i18n/I18nProvider';
 import type { ProductRecommendationStat } from '@/lib/types';
 
 type TopProductsTableProps = {
@@ -15,19 +18,20 @@ function confidenceColor(score: number) {
 }
 
 export function TopProductsTable({ products }: Readonly<TopProductsTableProps>) {
+  const t = useT();
   const top = products.slice(0, 5);
   const max = Math.max(1, ...top.map((p) => p.recommendationCount));
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Top products</CardTitle>
-        <CardDescription>Ranked by recommendations served.</CardDescription>
+        <CardTitle>{t('topProducts.title')}</CardTitle>
+        <CardDescription>{t('topProducts.subtitle')}</CardDescription>
       </CardHeader>
       <CardContent>
         {top.length === 0 ? (
           <p className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-            No product activity yet.
+            {t('topProducts.empty')}
           </p>
         ) : (
           <ul className="divide-y divide-border">
@@ -56,7 +60,7 @@ export function TopProductsTable({ products }: Readonly<TopProductsTableProps>) 
                     className="text-xs font-medium tabular-nums"
                     style={{ color: confidenceColor(product.averageConfidence) }}
                   >
-                    {(product.averageConfidence * 100).toFixed(0)}% conf.
+                    {t('topProducts.conf', { pct: (product.averageConfidence * 100).toFixed(0) })}
                   </p>
                 </div>
               </li>

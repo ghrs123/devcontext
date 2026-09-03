@@ -1,23 +1,26 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
+
 import { Toaster } from '@/components/ui/toaster';
+import { I18nProvider } from '@/lib/i18n/I18nProvider';
+import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale } from '@/lib/i18n/config';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'FitVision — Store Dashboard',
+  title: 'FitVision — O tamanho certo, antes da compra',
   description:
-    'Manage products, size charts, and size-recommendation analytics for your store.',
+    'Plataforma de recomendação de tamanhos para lojas de moda online: produtos, tabelas de tamanhos e análise de recomendações.',
   icons: {
-    icon: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%234f46e5%22/%3E%3Cpath d=%22M9 22V10h9M9 16h7%22 stroke=%22white%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 fill=%22none%22/%3E%3Ccircle cx=%2222%22 cy=%2221%22 r=%223%22 stroke=%22white%22 stroke-width=%222.2%22 fill=%22none%22/%3E%3C/svg%3E'
+    icon: '/favicon.svg'
   }
 };
 
-export default function RootLayout({
-  children
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const cookieLocale = cookies().get(LOCALE_COOKIE)?.value;
+  const locale = isLocale(cookieLocale) ? cookieLocale : DEFAULT_LOCALE;
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -27,8 +30,10 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
-        {children}
-        <Toaster />
+        <I18nProvider initialLocale={locale}>
+          {children}
+          <Toaster />
+        </I18nProvider>
       </body>
     </html>
   );

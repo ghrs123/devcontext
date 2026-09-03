@@ -32,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n/I18nProvider';
 import type { ApiKeys, StoreProfile } from '@/lib/types';
 
 const PLATFORM_OPTIONS = [
@@ -60,6 +61,7 @@ function SettingsPageLoading() {
 }
 
 function SettingsPageContent() {
+  const t = useT();
   const searchParams = useSearchParams();
 
   const [profile, setProfile] = useState<StoreProfile | null>(null);
@@ -196,11 +198,9 @@ function SettingsPageContent() {
 
   return (
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Settings</h2>
+        <h2 className="text-xl font-semibold tracking-tight">{t('settings.title')}</h2>
 
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage your profile, API credentials, billing, and widget integration.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{t('settings.subtitle')}</p>
 
         <section className="mt-6 grid gap-6">
           <Card>
