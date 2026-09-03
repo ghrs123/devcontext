@@ -50,7 +50,19 @@ FitVision is a multi-tenant SaaS for clothing size recommendations (Shopify App 
   - Note: estimates are still derived from height+weight+age+sex only (no chest/waist input),
     so they are approximations — good enough to recommend a size, not a tailor. A future pass
     could calibrate the ratios against real anthropometric datasets (ANSUR II).
-- ⬜ First scraper (start with Zara) confirmed importing a real size chart
+- 🔄 First scraper (start with Zara) confirmed importing a real size chart
+  - ✅ Scraper *framework* verified: job lifecycle (PENDING→RUNNING→FAILED/COMPLETED), error
+    capture, graceful failure. Added `ScraperServiceTest` (5 cases) covering the
+    "never overwrite the active chart on failure" invariant, plus a new guard
+    (`validateScrapedEntries`) that also rejects a scraper which "succeeds" with junk
+    (< 2 distinct size labels, or measurements on < half the rows).
+  - ✅ Live Zara scrape → FAILED cleanly ("robots.txt disallows"; Zara's Akamai 403s the
+    raw robots.txt fetch). No chart corruption.
+  - 🔴 ZaraScraper (and HM/Mango/PullAndBear) are non-functional stubs — they hit the
+    homepage not a size guide, parse a bare `<table>`, extract chest only, and Zara blocks
+    datacenter Playwright. Needs a real size-guide JSON source + anti-bot infra (proxies /
+    scraping API) + a per-brand source URL. See spawned task "Build a working brand
+    size-chart scraper". Also: each scrape trigger leaves an orphan PENDING job row.
 - ⬜ Submitted to Shopify App Store
 - ✅ Bloqueadores de código para deploy (health check, env vars) — corrigidos, com teste
 

@@ -185,6 +185,11 @@ public class ScraperService {
             if (entries.isEmpty()) {
                 throw new IllegalStateException("No entries scraped for brand=" + brand.getSlug());
             }
+            // A scraper can "succeed" and still return junk when a site changes its markup.
+            // Guard the active chart: only replace it with something that looks like a real
+            // size chart. On failure this throws and drops into the catch below, leaving any
+            // existing active chart untouched.
+            validateScrapedEntries(entries, brand.getSlug());
 
             Product templateProduct = findOrCreateTemplateProductForGlobalBrand(brand, executorStoreId);
             SizeChartUploadResult upload = sizeChartService.uploadManual(executorStoreId, templateProduct.getId(), entries);
@@ -214,6 +219,39 @@ public class ScraperService {
             log.warn("Scrape failed: brandId={} jobId={} error={}", brand.getId(), job.getId(), ex.getMessage());
             return job;
         }
+    }
+
+    private static final int MIN_DISTINCT_SIZE_LABELS = 2;
+
+    /**
+     * Rejects a scraped result that is too thin to be a credible size chart, so a scraper
+     * that "succeeds" against changed markup cannot overwrite a good active chart with junk.
+     */
+    private void validateScrapedEntries(List<SizeEntryData> entries, String slug) {
+        long distinctLabels = entries.stream()
+                .map(SizeEntryData::sizeLabel)
+                .filter(l -> l != null && !l.isBlank())
+                .map(l -> l.trim().toUpperCase())
+                .distinct()
+                .count();
+        if (distinctLabels < MIN_DISTINCT_SIZE_LABELS) {
+            throw new IllegalStateException("Scraped size chart for brand=" + slug + " has only "
+                    + distinctLabels + " distinct size label(s) — refusing to replace the active chart");
+        }
+
+        long withBounds = entries.stream().filter(this::hasAnyBound).count();
+        if (withBounds * 2 < entries.size()) {
+            throw new IllegalStateException("Scraped size chart for brand=" + slug
+                    + " has measurements on only " + withBounds + " of " + entries.size()
+                    + " rows — refusing to replace the active chart");
+        }
+    }
+
+    private boolean hasAnyBound(SizeEntryData e) {
+        return e.chestMin() != null || e.chestMax() != null
+                || e.waistMin() != null || e.waistMax() != null
+                || e.hipMin() != null || e.hipMax() != null
+                || e.heightMin() != null || e.heightMax() != null;
     }
 
     private void throttleDomain(String domain) {
