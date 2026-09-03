@@ -117,6 +117,37 @@ class BillingFlowIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void stripeWebhook_newerApiVersion_stillUpgradesPlan() throws Exception {
+        // A Stripe account created today renders webhook events with an API version far
+        // newer than the one stripe-java is pinned to. The handler must still upgrade the
+        // plan (via deserializeUnsafe) instead of silently no-opping.
+        jdbcTemplate.update(
+                "UPDATE stores SET stripe_customer_id = ? WHERE id = ?",
+                TEST_CUSTOMER_ID,
+                session.storeId());
+
+        String payload = buildSubscriptionEventPayload(
+                "customer.subscription.created",
+                "sub_newapi_test",
+                TEST_CUSTOMER_ID,
+                starterPriceId,
+                "active",
+                Instant.now().getEpochSecond() + 86_400,
+                "2099-01-01.futuria");
+
+        mockMvc.perform(post(STRIPE_WEBHOOK_URL)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Stripe-Signature", signStripePayload(payload))
+                        .content(payload))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get(BILLING_STATUS_URL)
+                        .header(AUTHORIZATION_HEADER, testBearer(session.jwt())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.plan", is("STARTER")));
+    }
+
+    @Test
     void stripeWebhook_subscriptionDeleted_downgradeToFree() throws Exception {
         jdbcTemplate.update(
                 """
@@ -235,6 +266,17 @@ class BillingFlowIT extends AbstractIntegrationTest {
                                                  String priceId,
                                                  String status,
                                                  Long currentPeriodEnd) throws Exception {
+        return buildSubscriptionEventPayload(
+                type, subscriptionId, customerId, priceId, status, currentPeriodEnd, "2023-10-16");
+    }
+
+    private String buildSubscriptionEventPayload(String type,
+                                                 String subscriptionId,
+                                                 String customerId,
+                                                 String priceId,
+                                                 String status,
+                                                 Long currentPeriodEnd,
+                                                 String apiVersion) throws Exception {
         long periodStart = Instant.now().getEpochSecond();
         long periodEnd = currentPeriodEnd != null ? currentPeriodEnd : periodStart + 2_592_000;
 
@@ -269,7 +311,7 @@ class BillingFlowIT extends AbstractIntegrationTest {
         Map<String, Object> event = new java.util.LinkedHashMap<>();
         event.put("id", "evt_" + testUniqueSuffix());
         event.put("object", "event");
-        event.put("api_version", "2023-10-16");
+        event.put("api_version", apiVersion);
         event.put("created", periodStart);
         event.put("livemode", false);
         event.put("type", type);

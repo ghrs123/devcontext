@@ -6,6 +6,7 @@ import com.fitvision.infrastructure.persistence.StoreRepository;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
 import com.stripe.model.EventDataObjectDeserializer;
+import com.stripe.model.StripeObject;
 import com.stripe.model.Subscription;
 import com.stripe.net.Webhook;
 import org.slf4j.Logger;
@@ -129,7 +130,7 @@ public class StripeWebhookController {
         // We extract the subscription ID from the raw data.
         try {
             com.stripe.model.Invoice invoice = (com.stripe.model.Invoice)
-                    event.getDataObjectDeserializer().getObject().orElse(null);
+                    deserializeEventObject(event).orElse(null);
             if (invoice == null) return;
 
             String subscriptionId = invoice.getSubscription();
@@ -146,13 +147,32 @@ public class StripeWebhookController {
     }
 
     private Optional<Subscription> deserializeSubscription(Event event) {
+        return deserializeEventObject(event)
+                .filter(obj -> obj instanceof Subscription)
+                .map(obj -> (Subscription) obj);
+    }
+
+    /**
+     * Deserializes the event's data object, tolerating a mismatch between the Stripe
+     * account's API version and the one {@code stripe-java} is pinned to.
+     *
+     * <p>{@link EventDataObjectDeserializer#getObject()} returns empty whenever the event
+     * was rendered with a different API version, which would otherwise make every webhook
+     * a silent no-op. The fields this controller reads (subscription id, customer, status,
+     * {@code items[].price.id}; invoice subscription id) are stable across versions, so we
+     * fall back to {@link EventDataObjectDeserializer#deserializeUnsafe()}.
+     */
+    private Optional<StripeObject> deserializeEventObject(Event event) {
         EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
+        Optional<StripeObject> object = deserializer.getObject();
+        if (object.isPresent()) {
+            return object;
+        }
         try {
-            return deserializer.getObject()
-                    .filter(obj -> obj instanceof Subscription)
-                    .map(obj -> (Subscription) obj);
+            return Optional.ofNullable(deserializer.deserializeUnsafe());
         } catch (Exception ex) {
-            log.error("Failed to deserialize Stripe subscription from event {}: {}", event.getId(), ex.getMessage());
+            log.error("Failed to deserialize Stripe event {} (type={}): {}",
+                    event.getId(), event.getType(), ex.getMessage());
             return Optional.empty();
         }
     }
