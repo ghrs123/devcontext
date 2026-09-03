@@ -17,8 +17,15 @@ FitVision is a multi-tenant SaaS for clothing size recommendations (Shopify App 
     `/actuator/health` UP, register/login/billing-status 200, checkout → clean `STRIPE_ERROR` with
     placeholder keys. Fixed 4 pre-existing deploy blockers along the way (Neon URL post-processor was
     mis-registered + `"jdbc:"+url` broke on credentials; health-probe threshold; `postgres://` branch).
-  - ✅ `mvn verify` still green after the deploy fixes — 75/75 IT + 55/55 unit.
-  - ⬜ Actual Railway (or Render/Fly) deploy + smoke test — not done.
+  - ✅ Stripe TEST mode verified locally end to end (real sk_test_ + 3 real recurring prices +
+    `stripe listen`): checkout PRO → webhook → plan=PRO (limits 50/25000); cancel → FREE; FREE
+    product limit → 402. Fixed a silent no-op — webhooks were dropping every event because the
+    Stripe account's API version (2026-05) ≠ stripe-java's pinned 2023-10-16.
+  - ✅ Core recommendation flow verified on the running stack (register → product → manual size
+    chart → /size-recommendation; GDPR zeroing both directions; auth 401 / unknown-product 404).
+  - ✅ `mvn verify` still green after all fixes — 76 IT + 55 unit.
+  - ⬜ Actual Railway (or Render/Fly) deploy + smoke test — deferred by choice; local-first.
+  - Known gap: subscription.current_period_end null on new-API-version events until stripe-java bump.
 - ⬜ Installed on a Shopify dev store — not yet tested end to end
 - ⬜ Widget confirmed working against a real store's products
 - ⬜ First scraper (start with Zara) confirmed importing a real size chart
