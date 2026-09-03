@@ -5,7 +5,7 @@ import { clearShopCredentials, getShopCredentials } from './store.js';
 import { createProduct, deactivateStore, deleteProduct, getShopifyStatus, updateProduct } from './fitvision.js';
 
 const SHOPIFY_API_VERSION = config.shopify.apiVersion;
-const WIDGET_HOST = config.shopify.hostName;
+const WIDGET_HOST = config.shopify.hostUrl;
 
 /**
  * Registers webhook subscriptions with Shopify for the given shop.

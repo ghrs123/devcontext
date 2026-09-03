@@ -14,7 +14,8 @@ const shopify = shopifyApi({
   apiSecretKey: config.shopify.apiSecret,
   scopes: config.shopify.scopes,
   hostName: config.shopify.hostName,
-  apiVersion: ApiVersion.January24,
+  hostScheme: config.shopify.hostScheme,
+  apiVersion: ApiVersion.July25,
   isEmbeddedApp: true,
 });
 
