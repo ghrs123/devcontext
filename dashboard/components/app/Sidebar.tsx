@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, LifeBuoy, Package, Settings, X } from 'lucide-react';
+import { BarChart3, Package, Settings, X } from 'lucide-react';
 
 import { Wordmark } from '@/components/brand/Logo';
 import { Badge } from '@/components/ui/badge';
@@ -93,17 +93,7 @@ export function Sidebar({ mobileOpen, onClose, profile }: Readonly<SidebarProps>
         </nav>
 
         <div className="border-t border-border p-3">
-          <a
-            href="https://fitvision.io/docs"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <LifeBuoy className="h-4 w-4" />
-            Docs &amp; support
-          </a>
-
-          <div className="mt-2 rounded-lg border border-border bg-card p-3">
+          <div className="rounded-lg border border-border bg-card p-3">
             <p className="truncate text-sm font-medium">{profile?.name || 'Your store'}</p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile?.email || ''}</p>
             <div className="mt-2 flex items-center gap-2">
