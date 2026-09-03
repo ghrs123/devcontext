@@ -17,7 +17,8 @@ FitVision is a multi-tenant SaaS for clothing size recommendations (Shopify App 
     `/actuator/health` UP, register/login/billing-status 200, checkout → clean `STRIPE_ERROR` with
     placeholder keys. Fixed 4 pre-existing deploy blockers along the way (Neon URL post-processor was
     mis-registered + `"jdbc:"+url` broke on credentials; health-probe threshold; `postgres://` branch).
-  - ⬜ Actual Railway (or Render/Fly) deploy + smoke test — not done. `mvn verify` (Docker) to re-run.
+  - ✅ `mvn verify` still green after the deploy fixes — 75/75 IT + 55/55 unit.
+  - ⬜ Actual Railway (or Render/Fly) deploy + smoke test — not done.
 - ⬜ Installed on a Shopify dev store — not yet tested end to end
 - ⬜ Widget confirmed working against a real store's products
 - ⬜ First scraper (start with Zara) confirmed importing a real size chart
