@@ -13,6 +13,11 @@ FitVision is a multi-tenant SaaS for clothing size recommendations (Shopify App 
 - ✅ `mvn test` — unit tests passing (recommendation engine, body profile calculator, size chart matcher, CSV/Excel parsers, DatabaseHealthIndicator)
 - ✅ `mvn verify` — 75/75 passing (unit + Testcontainers integration incl. `BillingFlowIT`, `ShopifyWebhookIT`, `StoreRegistrationFlowIT`). Milestone 1 done.
 - 🔄 Deployed to a real environment (Railway + Neon + Stripe TEST keys, per README) — **milestone 2, in progress**
+  - ✅ `prod` profile verified locally against the real Neon DB: boots, Flyway V1–V10 applied,
+    `/actuator/health` UP, register/login/billing-status 200, checkout → clean `STRIPE_ERROR` with
+    placeholder keys. Fixed 4 pre-existing deploy blockers along the way (Neon URL post-processor was
+    mis-registered + `"jdbc:"+url` broke on credentials; health-probe threshold; `postgres://` branch).
+  - ⬜ Actual Railway (or Render/Fly) deploy + smoke test — not done. `mvn verify` (Docker) to re-run.
 - ⬜ Installed on a Shopify dev store — not yet tested end to end
 - ⬜ Widget confirmed working against a real store's products
 - ⬜ First scraper (start with Zara) confirmed importing a real size chart
