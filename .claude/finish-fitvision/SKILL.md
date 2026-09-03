@@ -26,8 +26,27 @@ FitVision is a multi-tenant SaaS for clothing size recommendations (Shopify App 
   - ✅ `mvn verify` still green after all fixes — 76 IT + 55 unit.
   - ⬜ Actual Railway (or Render/Fly) deploy + smoke test — deferred by choice; local-first.
   - Known gap: subscription.current_period_end null on new-API-version events until stripe-java bump.
-- ⬜ Installed on a Shopify dev store — not yet tested end to end
-- ⬜ Widget confirmed working against a real store's products
+- 🔄 Installed on a Shopify dev store — **partially verified locally**
+  - ✅ OAuth install completed against a real dev store (`fitvision-test.myshopify.com`) via a
+    cloudflared tunnel + local shopify-app. HMAC valid, token exchanged.
+  - ✅ FitVision store row created and linked (`shopify_shop` set) with the Shopify access token
+    stored **AES-256-GCM encrypted** — the Shopify token invariant holds.
+  - ✅ `app/uninstalled` webhook registered.
+  - ⬜ Auto product sync + ScriptTag injection — blocked: needs `read_products` /
+    `write_script_tags` scopes, which Shopify's new Dev Dashboard only sets via
+    `shopify.app.toml` + Shopify CLI (`shopify app deploy`). No dashboard UI field.
+    Also: Shopify CLI ≥ latest needs Node 22 (repo/dev box is on Node 20). Deploy-time task.
+  - Fixed 2 shopify-app bugs: HOST_NAME with scheme broke the OAuth redirect_uri; API version
+    2024-01 was past Shopify's supported window.
+- 🔄 Widget confirmed working against a real store's products — **pipeline yes, accuracy no**
+  - ✅ Built the widget (4.4 KB gzip, under the 50 KB invariant), embedded it on a test PDP page
+    pointed at the connected store's real API key + a manually-mirrored Shopify product
+    (`8936123596823`) with a manual size chart → the widget renders a recommendation end to end.
+  - 🔴 The recommendation is wrong. `BodyProfileCalculator` mis-scales the chest/waist/hip
+    estimates (185cm/95kg male → estimated ~128cm chest → picks "S"). Every input returns
+    quality=CLOSEST / confidence 0.2. This is the core product value and needs real anthropometric
+    formulas + validation — see spawned task "Fix recommendation engine anthropometric estimates".
+    The 130 tests pass because they use synthetic *consistent* data.
 - ⬜ First scraper (start with Zara) confirmed importing a real size chart
 - ⬜ Submitted to Shopify App Store
 - ✅ Bloqueadores de código para deploy (health check, env vars) — corrigidos, com teste
