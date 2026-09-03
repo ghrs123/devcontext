@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>Measurements used in the happy-path tests: height=175cm, weight=75kg, gender=MALE.
  * Based on the BodyProfileCalculator formulas, the estimated measurements will be
- * approximately chest=121cm, waist=59cm, hip=127cm — which fall within the "M" SizeEntry
+ * approximately chest=98cm, waist=85cm, hip=96cm — which fall within the "M" SizeEntry
  * ranges inserted in @BeforeEach.
  */
 @AutoConfigureMockMvc
@@ -162,18 +162,18 @@ class WidgetRecommendationControllerIT extends AbstractIntegrationTest {
         sizeChartRepository.save(sizeChart);
 
         // --- SizeEntry "M" — designed to match 175cm/75kg/MALE buyer ---
-        // Calculated estimates: chest≈121cm, waist≈59cm, hip≈127cm
+        // Calculated estimates: chest≈97.9cm, waist≈85.1cm, hip≈96.0cm
         sizeEntryMId = UUID.randomUUID();
         SizeEntry entryM = new SizeEntry();
         entryM.setId(sizeEntryMId);
         entryM.setSizeChartId(sizeChartId);
         entryM.setSizeLabel("M");
-        entryM.setChestMin(new BigDecimal("115.0"));
-        entryM.setChestMax(new BigDecimal("125.0"));
-        entryM.setWaistMin(new BigDecimal("55.0"));
-        entryM.setWaistMax(new BigDecimal("65.0"));
-        entryM.setHipMin(new BigDecimal("122.0"));
-        entryM.setHipMax(new BigDecimal("133.0"));
+        entryM.setChestMin(new BigDecimal("92.0"));
+        entryM.setChestMax(new BigDecimal("102.0"));
+        entryM.setWaistMin(new BigDecimal("80.0"));
+        entryM.setWaistMax(new BigDecimal("90.0"));
+        entryM.setHipMin(new BigDecimal("91.0"));
+        entryM.setHipMax(new BigDecimal("101.0"));
         sizeEntryRepository.save(entryM);
 
         // --- SizeEntry "L" — larger range ---
@@ -182,12 +182,12 @@ class WidgetRecommendationControllerIT extends AbstractIntegrationTest {
         entryL.setId(sizeEntryLId);
         entryL.setSizeChartId(sizeChartId);
         entryL.setSizeLabel("L");
-        entryL.setChestMin(new BigDecimal("126.0"));
-        entryL.setChestMax(new BigDecimal("136.0"));
-        entryL.setWaistMin(new BigDecimal("66.0"));
-        entryL.setWaistMax(new BigDecimal("76.0"));
-        entryL.setHipMin(new BigDecimal("133.0"));
-        entryL.setHipMax(new BigDecimal("143.0"));
+        entryL.setChestMin(new BigDecimal("102.0"));
+        entryL.setChestMax(new BigDecimal("112.0"));
+        entryL.setWaistMin(new BigDecimal("90.0"));
+        entryL.setWaistMax(new BigDecimal("100.0"));
+        entryL.setHipMin(new BigDecimal("101.0"));
+        entryL.setHipMax(new BigDecimal("111.0"));
         sizeEntryRepository.save(entryL);
     }
 

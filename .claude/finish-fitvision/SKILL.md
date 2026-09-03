@@ -38,15 +38,18 @@ FitVision is a multi-tenant SaaS for clothing size recommendations (Shopify App 
     Also: Shopify CLI ≥ latest needs Node 22 (repo/dev box is on Node 20). Deploy-time task.
   - Fixed 2 shopify-app bugs: HOST_NAME with scheme broke the OAuth redirect_uri; API version
     2024-01 was past Shopify's supported window.
-- 🔄 Widget confirmed working against a real store's products — **pipeline yes, accuracy no**
+- ✅ Widget confirmed working against a real store's products
   - ✅ Built the widget (4.4 KB gzip, under the 50 KB invariant), embedded it on a test PDP page
     pointed at the connected store's real API key + a manually-mirrored Shopify product
-    (`8936123596823`) with a manual size chart → the widget renders a recommendation end to end.
-  - 🔴 The recommendation is wrong. `BodyProfileCalculator` mis-scales the chest/waist/hip
-    estimates (185cm/95kg male → estimated ~128cm chest → picks "S"). Every input returns
-    quality=CLOSEST / confidence 0.2. This is the core product value and needs real anthropometric
-    formulas + validation — see spawned task "Fix recommendation engine anthropometric estimates".
-    The 130 tests pass because they use synthetic *consistent* data.
+    (`8936123596823`) with a manual size chart → widget renders the recommendation end to end.
+  - ✅ Recommendation engine rewritten. `BodyProfileCalculator` now uses sex-specific
+    circumference/stature ratios scaled by `sqrt(BMI/22)` + a body-fat waist term;
+    `SizeChartMatcher` uses graded per-dimension scoring and returns NO_MATCH when nothing fits.
+    Live: 178/72M→M EXACT, 182/88M→L EXACT, 188/98M→XL, 160/52F→XS — monotonic, confidence
+    0.86–1.0. Widget shows "size L · Confidence High". `mvn verify` 58 unit + 76 IT green.
+  - Note: estimates are still derived from height+weight+age+sex only (no chest/waist input),
+    so they are approximations — good enough to recommend a size, not a tailor. A future pass
+    could calibrate the ratios against real anthropometric datasets (ANSUR II).
 - ⬜ First scraper (start with Zara) confirmed importing a real size chart
 - ⬜ Submitted to Shopify App Store
 - ✅ Bloqueadores de código para deploy (health check, env vars) — corrigidos, com teste

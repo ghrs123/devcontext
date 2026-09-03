@@ -36,8 +36,9 @@ class AnalyticsFlowIT extends AbstractIntegrationTest {
 
         UUID matchedProduct = createProductViaApi(session.jwt(), matchedProductExternalId, "Matched Product", brandId);
 
+        // 175cm/75kg MALE → estimated chest≈98, waist≈85, hip≈96 → fully inside "M"
         uploadManualSizeChart(session.jwt(), matchedProduct, List.of(
-                new SizeEntryData("M", 115.0, 125.0, 55.0, 65.0, 122.0, 133.0, null, null)));
+                new SizeEntryData("M", 92.0, 102.0, 80.0, 90.0, 91.0, 101.0, null, null)));
     }
 
     @AfterEach

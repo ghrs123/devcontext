@@ -22,9 +22,12 @@ public final class MatchResult {
         return new MatchResult(size, score, MatchQuality.PARTIAL);
     }
 
-    /** Score is fixed at 0.2 per domain rules — closest match is inherently low-confidence. */
-    public static MatchResult closest(String size) {
-        return new MatchResult(size, 0.2, MatchQuality.CLOSEST);
+    /**
+     * A best-effort match where no size fully contains the estimated measurements.
+     * Inherently low-confidence — the score reflects how near the closest size is.
+     */
+    public static MatchResult closest(String size, double score) {
+        return new MatchResult(size, score, MatchQuality.CLOSEST);
     }
 
     public static MatchResult noMatch() {

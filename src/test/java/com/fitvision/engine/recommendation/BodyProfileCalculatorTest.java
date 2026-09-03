@@ -38,15 +38,49 @@ class BodyProfileCalculatorTest {
     }
 
     @Test
-    void given_averageMale_when_calculate_then_chestWaistHipWithinExpectedRange() {
-        // chest ≈ 85 + (leanMass × 0.4) + (bmi × 0.5) ≈ 121.2
-        // waist ≈ (75 × 0.74) + (175 × 0.18) - 28 = 59.0
-        // hip   ≈ chest × 1.05 × 1.0 (MALE) ≈ 127.3
-        BodyProfile profile = calculator.calculate(175, 75, Gender.MALE, 30);
+    void given_averageMale_when_calculate_then_chestWaistHipAreAnatomicallyPlausible() {
+        // 175 cm / 75 kg male, BMI 24.5. Real chest/waist/hip for this build land near
+        // 96–100 / 82–88 / 93–98 cm.
+        BodyProfile p = calculator.calculate(175, 75, Gender.MALE, 30);
 
-        assertEquals(121.2, profile.getEstimatedChestCm(), DELTA);
-        assertEquals(59.0, profile.getEstimatedWaistCm(), DELTA);
-        assertEquals(127.3, profile.getEstimatedHipCm(), DELTA);
+        assertInRange(p.getEstimatedChestCm(), 93, 103, "chest");
+        assertInRange(p.getEstimatedWaistCm(), 80, 90, "waist");
+        assertInRange(p.getEstimatedHipCm(), 90, 100, "hip");
+        // chest > waist for an average male build
+        assertTrue(p.getEstimatedChestCm() > p.getEstimatedWaistCm(), "chest should exceed waist");
+    }
+
+    @Test
+    void given_largerMale_when_calculate_then_circumferencesScaleUpConsistently() {
+        // 185 cm / 95 kg male, BMI 27.8 — used to be mis-estimated as a ~128 cm chest.
+        BodyProfile p = calculator.calculate(185, 95, Gender.MALE, 35);
+
+        assertInRange(p.getEstimatedChestCm(), 104, 116, "chest");
+        assertInRange(p.getEstimatedWaistCm(), 90, 102, "waist");
+        assertInRange(p.getEstimatedHipCm(), 102, 114, "hip");
+
+        BodyProfile smaller = calculator.calculate(185, 68, Gender.MALE, 35);
+        assertTrue(p.getEstimatedChestCm() > smaller.getEstimatedChestCm(),
+                "heavier person at the same height should have a larger chest estimate");
+        assertTrue(p.getEstimatedWaistCm() > smaller.getEstimatedWaistCm(),
+                "heavier person at the same height should have a larger waist estimate");
+    }
+
+    @Test
+    void given_referenceFemale_when_calculate_then_bustWaistHipArePlausible() {
+        // 165 cm / 60 kg female, BMI 22 — a textbook reference build (~86 / 68 / 94).
+        BodyProfile p = calculator.calculate(165, 60, Gender.FEMALE, 30);
+
+        assertInRange(p.getEstimatedChestCm(), 82, 92, "bust");
+        assertInRange(p.getEstimatedWaistCm(), 64, 74, "waist");
+        assertInRange(p.getEstimatedHipCm(), 89, 99, "hip");
+        // female hip should exceed bust (pear-leaning reference ratios)
+        assertTrue(p.getEstimatedHipCm() > p.getEstimatedChestCm(), "female hip should exceed bust");
+    }
+
+    private static void assertInRange(double value, double lo, double hi, String name) {
+        assertTrue(value >= lo && value <= hi,
+                name + " estimate " + value + " outside plausible [" + lo + ", " + hi + "]");
     }
 
     @Test

@@ -91,30 +91,48 @@ class SizeChartMatcherTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void given_singleEntry_when_twoOfThreeDimensionsMatch_then_returnsPartial() {
-        // normalProfile: chest=90 (matches), waist=75 (matches), hip=95 (DOES NOT match — range 50–70)
+    void given_singleEntry_when_chestAndWaistContainedButHipFarOff_then_returnsPartial() {
+        // normalProfile: chest=90 (contained), waist=75 (contained), hip=95 (range 50–70, far off → 0)
         SizeEntry entry = entryWithChestWaistHip("S", 85, 95, 70, 80, 50, 70);
 
         MatchResult result = matcher.match(normalProfile, List.of(entry));
 
         assertEquals(MatchResult.MatchQuality.PARTIAL, result.getQuality());
-        assertEquals(0.67, result.getConfidenceScore(), 0.02); // 2/3 = 0.667
+        // weighted: chest 0.34 + waist 0.34 + hip 0 = 0.68 over 0.88 available ≈ 0.77
+        assertEquals(0.77, result.getConfidenceScore(), 0.02);
         assertEquals("S", result.getRecommendedSize());
     }
 
     // -------------------------------------------------------------------------
-    // Single entry — no dimensions match → CLOSEST (only option)
+    // Single entry — dimensions just outside the range → CLOSEST
     // -------------------------------------------------------------------------
 
     @Test
-    void given_singleEntry_when_noDimensionsMatch_then_returnsClosest() {
-        // normalProfile: chest=90, waist=75, hip=95 — all out of the tiny range below
-        SizeEntry entry = entryWithChestWaistHip("XS", 50, 60, 40, 50, 55, 65);
+    void given_singleEntry_when_everyDimensionSlightlyOutsideRange_then_returnsClosest() {
+        // normalProfile: chest=90, waist=75, hip=95 — each ~3cm outside the entry's bounds
+        SizeEntry entry = entryWithChestWaistHip("XS", 84, 87, 78, 82, 89, 92);
 
         MatchResult result = matcher.match(normalProfile, List.of(entry));
 
         assertEquals(MatchResult.MatchQuality.CLOSEST, result.getQuality());
         assertEquals("XS", result.getRecommendedSize());
+        assertTrue(result.getConfidenceScore() < 0.6 && result.getConfidenceScore() > 0.3,
+                "closest confidence should be modest, got " + result.getConfidenceScore());
+    }
+
+    // -------------------------------------------------------------------------
+    // Single entry — nothing credibly fits → NO_MATCH
+    // -------------------------------------------------------------------------
+
+    @Test
+    void given_singleEntry_when_everyDimensionFarOff_then_returnsNoMatch() {
+        // normalProfile: chest=90, waist=75, hip=95 — all far below this tiny range
+        SizeEntry entry = entryWithChestWaistHip("XS", 50, 60, 40, 50, 55, 65);
+
+        MatchResult result = matcher.match(normalProfile, List.of(entry));
+
+        assertEquals(MatchResult.MatchQuality.NO_MATCH, result.getQuality());
+        assertNull(result.getRecommendedSize());
     }
 
     // -------------------------------------------------------------------------
@@ -122,17 +140,15 @@ class SizeChartMatcherTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void given_multipleEntries_when_oneBestMatch_then_returnsBestMatch() {
-        // Entry S: only chest in range (normalProfile chest=90) → score 1/1 if only chest defined
-        // Entry M: chest, waist, hip all in range → EXACT
-        SizeEntry entryS = entryWithChestOnly("S", 85, 95); // chest in range
-        SizeEntry entryM = entryWithChestWaistHip("M", 85, 95, 70, 80, 90, 100); // all in range
+    void given_multipleEntries_when_scoresTie_then_prefersEntryWithMoreContainedDimensions() {
+        // Entry S: only chest bounded (contained) → overallScore 1.0 but a single dimension
+        // Entry M: chest, waist, hip all contained → overallScore 1.0 AND EXACT-eligible
+        SizeEntry entryS = entryWithChestOnly("S", 85, 95);
+        SizeEntry entryM = entryWithChestWaistHip("M", 85, 95, 70, 80, 90, 100);
 
         MatchResult result = matcher.match(normalProfile, List.of(entryS, entryM));
 
-        // entryM matches 3/3 = 1.0 (EXACT) vs entryS 1/1 = 1.0 (EXACT) but M has more dimensions
-        // Both score 1.0 — waist matters for tie-breaking but entryM also has waist in range
-        // In any case, both are valid; assert the quality is EXACT
+        assertEquals("M", result.getRecommendedSize());
         assertEquals(MatchResult.MatchQuality.EXACT, result.getQuality());
         assertEquals(1.0, result.getConfidenceScore(), DELTA);
     }
@@ -152,22 +168,21 @@ class SizeChartMatcherTest {
     }
 
     // -------------------------------------------------------------------------
-    // Tie-breaking: prefer waist match
+    // Tie-breaking: when two sizes both fully contain the body, the better-centred one wins
     // -------------------------------------------------------------------------
 
     @Test
-    void given_twoEntriesWithSameScore_when_oneHasWaistMatch_then_prefersWaistMatch() {
-        // Entry A: only chest defined, chest in range → score 1/1 = 1.0, NO waist dim
-        // Entry B: only waist defined, waist in range → score 1/1 = 1.0, waist matched
-        // normalProfile: chest=90, waist=75
-        SizeEntry entryA = entryWithChestOnly("A", 85, 95);    // matches chest, no waist
-        SizeEntry entryB = entryWithWaistOnly("B", 70, 80);    // matches waist, no chest
+    void given_twoContainingEntries_when_scoresTie_then_prefersBetterCentredRanges() {
+        // normalProfile: chest=90, waist=75, hip=95
+        // Both entries contain all three, so overallScore is 1.0 for each.
+        // entryWide's ranges sit off to one side; entryCentred is centred on the body.
+        SizeEntry entryWide = entryWithChestWaistHip("WIDE", 85, 110, 70, 95, 90, 115);
+        SizeEntry entryCentred = entryWithChestWaistHip("CENTRED", 86, 94, 71, 79, 91, 99);
 
-        MatchResult result = matcher.match(normalProfile, List.of(entryA, entryB));
+        MatchResult result = matcher.match(normalProfile, List.of(entryWide, entryCentred));
 
-        // Both score 1.0 (EXACT), but B has waistMatched=true → B wins
-        assertEquals("B", result.getRecommendedSize());
-        assertEquals(1.0, result.getConfidenceScore(), DELTA);
+        assertEquals("CENTRED", result.getRecommendedSize());
+        assertEquals(MatchResult.MatchQuality.EXACT, result.getQuality());
     }
 
     // -------------------------------------------------------------------------

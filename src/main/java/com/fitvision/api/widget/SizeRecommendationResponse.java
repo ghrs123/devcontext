@@ -82,8 +82,11 @@ public class SizeRecommendationResponse {
         MatchResult.MatchQuality quality = output.getQuality();
         String size = output.getRecommendedSize();
 
-        if (!output.isHasSizeChart() || quality == MatchResult.MatchQuality.NO_MATCH || size == null) {
+        if (!output.isHasSizeChart()) {
             return "We don't have size data for this product yet. Please consult the brand's size guide.";
+        }
+        if (quality == MatchResult.MatchQuality.NO_MATCH || size == null) {
+            return "We couldn't confidently match your measurements to a size. Please consult the brand's size guide.";
         }
         if (quality == MatchResult.MatchQuality.EXACT && output.getConfidenceScore() >= 0.8) {
             return "Based on your measurements, we recommend size " + size + ".";

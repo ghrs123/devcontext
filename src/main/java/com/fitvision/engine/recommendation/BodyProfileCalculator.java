@@ -5,14 +5,23 @@ import com.fitvision.shared.exception.InvalidBodyMeasurementException;
 import org.springframework.stereotype.Service;
 
 /**
- * Stateless service that derives anthropometric estimates from buyer-supplied inputs.
+ * Stateless service that derives anthropometric estimates from buyer-supplied inputs
+ * (height, weight, gender, age).
  *
- * Formulas used:
- * - BMI: Quetelet index (weight_kg / height_m²)
- * - Body fat: Deurenberg et al. (1991) — validated for adults
- * - Chest estimate: lean mass proxy adapted from anthropometric tables
- * - Waist estimate: YMCA protocol approximation
- * - Hip estimate: chest-to-hip ratio adjusted by gender
+ * <p>Model:
+ * <ul>
+ *   <li><b>BMI</b> — Quetelet index (weight_kg / height_m²).</li>
+ *   <li><b>Body fat %</b> — Deurenberg et al. (1991), validated for adults.</li>
+ *   <li><b>Chest / waist / hip circumference</b> — each is a sex-specific fraction of
+ *       stature at a reference BMI of 22, scaled by {@code sqrt(BMI / 22)}. A trunk
+ *       modelled as a cylinder has circumference proportional to the square root of its
+ *       cross-sectional area, and area is proportional to mass at fixed height, so girth
+ *       scales with the square root of BMI. Waist gets an extra adjustment for body-fat
+ *       distribution (a higher-fat person at the same BMI carries more at the waist).</li>
+ * </ul>
+ * The reference ratios are drawn from adult anthropometric norms (a ~175&nbsp;cm,
+ * BMI&nbsp;22 man measures roughly 93/80/91&nbsp;cm chest/waist/hip). These are estimates
+ * from coarse inputs — {@link SizeChartMatcher} treats them as such when scoring.
  */
 @Service
 public class BodyProfileCalculator {
@@ -30,28 +39,32 @@ public class BodyProfileCalculator {
     private static final double DEURENBERG_GENDER_FACTOR = 10.8;
     private static final double DEURENBERG_CONSTANT = 5.4;
 
-    // Chest estimate constants
-    private static final double CHEST_BASE_CM = 85.0;
-    private static final double CHEST_LEAN_MASS_FACTOR = 0.4;
-    private static final double CHEST_BMI_FACTOR = 0.5;
+    // Circumference model
+    private static final double REFERENCE_BMI = 22.0;
+    private static final double BMI_SCALE_FLOOR = 15.0;
+    private static final double BMI_SCALE_CEILING = 45.0;
 
-    // Waist estimate constants (YMCA approximation)
-    private static final double WAIST_WEIGHT_FACTOR = 0.74;
-    private static final double WAIST_HEIGHT_FACTOR = 0.18;
-    private static final double WAIST_CONSTANT = 28.0;
+    // Circumference-to-stature ratios at REFERENCE_BMI (adult anthropometric norms).
+    private static final double CHEST_RATIO_MALE = 0.530;
+    private static final double CHEST_RATIO_FEMALE = 0.520;
+    private static final double WAIST_RATIO_MALE = 0.455;
+    private static final double WAIST_RATIO_FEMALE = 0.420;
+    private static final double HIP_RATIO_MALE = 0.520;
+    private static final double HIP_RATIO_FEMALE = 0.565;
 
-    // Hip estimate constants
-    private static final double HIP_CHEST_MULTIPLIER = 1.05;
-    private static final double HIP_FEMALE_ADJUSTMENT = 1.08;
-    private static final double HIP_MALE_ADJUSTMENT = 1.0;
-    private static final double HIP_UNISEX_ADJUSTMENT = 1.04;
+    // Waist adjustment for body-fat distribution.
+    private static final double REF_BODY_FAT_MALE = 18.0;
+    private static final double REF_BODY_FAT_FEMALE = 26.0;
+    private static final double WAIST_FAT_SENSITIVITY = 0.6;
+    private static final double WAIST_FAT_ADJ_MIN = -0.06;
+    private static final double WAIST_FAT_ADJ_MAX = 0.12;
 
     /**
      * Computes a BodyProfile from buyer-supplied measurements.
      *
      * @param heightCm height in centimetres (50–250)
      * @param weightKg weight in kilograms (20–300)
-     * @param gender   gender for Deurenberg formula; must not be null
+     * @param gender   gender for the Deurenberg formula and sex-specific ratios; must not be null
      * @param age      age in years; null defaults to 30
      * @throws InvalidBodyMeasurementException if height or weight are outside valid ranges
      */
@@ -62,10 +75,12 @@ public class BodyProfileCalculator {
 
         double bmi = computeBmi(heightCm, weightKg);
         double bodyFatPct = computeBodyFatPct(bmi, effectiveAge, gender);
-        double leanMassKg = computeLeanMassKg(weightKg, bodyFatPct);
-        double chestCm = round1dp(computeChestCm(leanMassKg, bmi));
-        double waistCm = round1dp(computeWaistCm(weightKg, heightCm));
-        double hipCm = round1dp(computeHipCm(chestCm, gender));
+        double bmiScale = Math.sqrt(clamp(bmi, BMI_SCALE_FLOOR, BMI_SCALE_CEILING) / REFERENCE_BMI);
+
+        double chestCm = round1dp(chestRatio(gender) * heightCm * bmiScale);
+        double hipCm = round1dp(hipRatio(gender) * heightCm * bmiScale);
+        double waistCm = round1dp(
+                waistRatio(gender) * heightCm * bmiScale * (1.0 + waistFatAdjustment(bodyFatPct, gender)));
 
         return new BodyProfile(heightCm, weightKg, gender, effectiveAge,
                 round1dp(bmi), round1dp(bodyFatPct), chestCm, waistCm, hipCm);
@@ -99,29 +114,36 @@ public class BodyProfileCalculator {
                 - DEURENBERG_CONSTANT;
     }
 
-    /** lean_mass_kg = weight_kg × (1 - body_fat_pct / 100) */
-    private double computeLeanMassKg(double weightKg, double bodyFatPct) {
-        return weightKg * (1.0 - bodyFatPct / 100.0);
+    private double chestRatio(Gender gender) {
+        return blendByGender(gender, CHEST_RATIO_MALE, CHEST_RATIO_FEMALE);
     }
 
-    /** chest_cm = 85 + (lean_mass_kg × 0.4) + (bmi × 0.5) */
-    private double computeChestCm(double leanMassKg, double bmi) {
-        return CHEST_BASE_CM + (leanMassKg * CHEST_LEAN_MASS_FACTOR) + (bmi * CHEST_BMI_FACTOR);
+    private double waistRatio(Gender gender) {
+        return blendByGender(gender, WAIST_RATIO_MALE, WAIST_RATIO_FEMALE);
     }
 
-    /** waist_cm = (weight_kg × 0.74) + (height_cm × 0.18) - 28 — YMCA approximation */
-    private double computeWaistCm(double weightKg, double heightCm) {
-        return (WAIST_WEIGHT_FACTOR * weightKg) + (WAIST_HEIGHT_FACTOR * heightCm) - WAIST_CONSTANT;
+    private double hipRatio(Gender gender) {
+        return blendByGender(gender, HIP_RATIO_MALE, HIP_RATIO_FEMALE);
     }
 
-    /** hip_cm = chest_cm × 1.05 × gender_adjustment */
-    private double computeHipCm(double chestCm, Gender gender) {
-        double genderAdjustment = switch (gender) {
-            case FEMALE -> HIP_FEMALE_ADJUSTMENT;
-            case MALE -> HIP_MALE_ADJUSTMENT;
-            case UNISEX -> HIP_UNISEX_ADJUSTMENT;
+    /** Extra waist girth for a body-fat percentage above the sex reference (capped). */
+    private double waistFatAdjustment(double bodyFatPct, Gender gender) {
+        double refFat = blendByGender(gender, REF_BODY_FAT_MALE, REF_BODY_FAT_FEMALE);
+        double raw = WAIST_FAT_SENSITIVITY * (bodyFatPct - refFat) / 100.0;
+        return clamp(raw, WAIST_FAT_ADJ_MIN, WAIST_FAT_ADJ_MAX);
+    }
+
+    /** MALE → male value, FEMALE → female value, UNISEX → midpoint. */
+    private double blendByGender(Gender gender, double maleValue, double femaleValue) {
+        return switch (gender) {
+            case MALE -> maleValue;
+            case FEMALE -> femaleValue;
+            case UNISEX -> (maleValue + femaleValue) / 2.0;
         };
-        return chestCm * HIP_CHEST_MULTIPLIER * genderAdjustment;
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private double round1dp(double value) {

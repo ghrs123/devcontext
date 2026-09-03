@@ -119,8 +119,8 @@ class RecommendationEngineTest {
                 .build();
 
         // A size entry that fully covers this profile's estimated measurements
-        // male 175/75: chest≈121, waist≈59, hip≈127
-        SizeEntry entryM = sizeEntry("M", 115, 130, 54, 65, 120, 135);
+        // male 175/75: chest≈97.9, waist≈85.1, hip≈96.0
+        SizeEntry entryM = sizeEntry("M", 94, 102, 82, 90, 92, 100);
 
         when(productRepository.findByIdAndTenantId(productId, tenantId))
                 .thenReturn(Optional.of(product));
@@ -254,7 +254,7 @@ class RecommendationEngineTest {
                 .storeBodyData(false) // no consent
                 .build();
 
-        SizeEntry entryM = sizeEntry("M", 115, 130, 54, 65, 120, 135);
+        SizeEntry entryM = sizeEntry("M", 94, 102, 82, 90, 92, 100);
 
         when(productRepository.findByIdAndTenantId(productId, tenantId))
                 .thenReturn(Optional.of(product));
@@ -295,7 +295,7 @@ class RecommendationEngineTest {
                 .storeBodyData(true) // explicit consent
                 .build();
 
-        SizeEntry entryM = sizeEntry("M", 115, 130, 54, 65, 120, 135);
+        SizeEntry entryM = sizeEntry("M", 94, 102, 82, 90, 92, 100);
 
         when(productRepository.findByIdAndTenantId(productId, tenantId))
                 .thenReturn(Optional.of(product));
@@ -336,7 +336,7 @@ class RecommendationEngineTest {
                 .storeBodyData(false)
                 .build();
 
-        SizeEntry entryM = sizeEntry("M", 115, 130, 54, 65, 120, 135);
+        SizeEntry entryM = sizeEntry("M", 94, 102, 82, 90, 92, 100);
 
         when(productRepository.findByIdAndTenantId(productId, tenantId))
                 .thenReturn(Optional.of(product));
