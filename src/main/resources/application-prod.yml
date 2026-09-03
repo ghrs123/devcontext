@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: ${DATABASE_URL:${DB_URL}}
+    url: ${DATABASE_URL}
     driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
@@ -35,11 +35,11 @@ fitvision:
   admin:
     bootstrap-token: ${ADMIN_BOOTSTRAP_TOKEN:}
   jwt:
-    secret: ${JWT_SECRET:${FITVISION_JWT_SECRET}}
+    secret: ${JWT_SECRET}
     expiration-hours: 24
   shopify:
     encryption-key: ${SHOPIFY_ENCRYPTION_KEY}
-    shared-secret: ${SHOPIFY_SHARED_SECRET:${FITVISION_SHOPIFY_SHARED_SECRET}}
+    shared-secret: ${SHOPIFY_SHARED_SECRET}
   health:
     db:
       slow-threshold-ms: ${DB_HEALTH_SLOW_MS:100}

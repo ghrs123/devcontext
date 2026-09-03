@@ -10,7 +10,7 @@ Multi-tenant SaaS for clothing size recommendations. See [CLAUDE.md](CLAUDE.md) 
 2. Copy the connection string (format: `postgresql://user:password@host/dbname?sslmode=require`).
 3. Flyway runs on startup; all migrations in `src/main/resources/db/migration/` apply to a fresh database.
 
-The app converts Neon’s `postgresql://` (or `postgres://`) URL to `jdbc:postgresql://` automatically when `SPRING_PROFILES_ACTIVE=prod` (`NeonDatabaseUrlEnvironmentPostProcessor`), preserving the `?sslmode=require` query string. If you already have a `jdbc:`-prefixed URL it is passed through unchanged. The `prod` profile reads `DATABASE_URL`, falling back to `DB_URL`.
+The app converts Neon’s `postgresql://` (or `postgres://`) URL to `jdbc:postgresql://` automatically when `SPRING_PROFILES_ACTIVE=prod` (`NeonDatabaseUrlEnvironmentPostProcessor`), preserving the `?sslmode=require` (and `channel_binding`) query string. If you already have a `jdbc:`-prefixed URL it is passed through unchanged. The `prod` profile reads the `DATABASE_URL` env var (the dev profile uses `DB_URL`).
 
 ### 2. Build (optional for local Docker image)
 
@@ -31,10 +31,10 @@ Local full stack development still uses `docker compose` with `Dockerfile.dev`.
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` (or `DB_URL`) | Neon connection string, full, including `?sslmode=require` |
-| `JWT_SECRET` (or `FITVISION_JWT_SECRET`) | Random string, at least 32 bytes |
+| `DATABASE_URL` | Neon connection string, full, including `?sslmode=require` (the `prod` profile name; the dev profile / `.env.example` use `DB_URL`) |
+| `JWT_SECRET` | Random string, at least 32 bytes (the `prod` profile name; `.env.example` uses `FITVISION_JWT_SECRET`) |
 | `SHOPIFY_ENCRYPTION_KEY` | Base64-encoded 32-byte AES key (`openssl rand -base64 32`) — validated at boot |
-| `SHOPIFY_SHARED_SECRET` (or `FITVISION_SHOPIFY_SHARED_SECRET`) | Shared secret with the Shopify app — must match the Node service exactly |
+| `SHOPIFY_SHARED_SECRET` | Shared secret with the Shopify app — must equal the Node service's `FITVISION_SHOPIFY_SHARED_SECRET` exactly |
 | `STRIPE_SECRET_KEY` | Stripe secret key — `sk_test_...` for a test deploy, `sk_live_...` for production |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret (`whsec_...`) |
 | `STRIPE_PRICE_STARTER` / `_PRO` / `_TEAM` | Stripe recurring Price IDs — must be **three distinct non-empty values** or the app fails to start |

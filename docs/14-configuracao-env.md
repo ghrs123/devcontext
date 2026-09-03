@@ -63,11 +63,11 @@
 
 | Propriedade | Env var | Notas |
 |-------------|---------|-------|
-| `spring.datasource.url` | `DATABASE_URL` \| `DB_URL` | Neon; `postgresql://`/`postgres://` convertido para `jdbc:` no arranque |
+| `spring.datasource.url` | `DATABASE_URL` | Neon; `postgresql://`/`postgres://` convertido para `jdbc:` no arranque (dev usa `DB_URL`) |
 | `server.port` | `PORT` | Default 8080 |
-| `fitvision.jwt.secret` | `JWT_SECRET` \| `FITVISION_JWT_SECRET` | ≥ 32 bytes; fail-fast no boot |
+| `fitvision.jwt.secret` | `JWT_SECRET` | ≥ 32 bytes; fail-fast no boot (`.env.example` usa `FITVISION_JWT_SECRET`) |
 | `fitvision.shopify.encryption-key` | `SHOPIFY_ENCRYPTION_KEY` | Base64 → 32 bytes exatos; fail-fast no boot |
-| `fitvision.shopify.shared-secret` | `SHOPIFY_SHARED_SECRET` \| `FITVISION_SHOPIFY_SHARED_SECRET` | tem de igualar o `shopify-app` |
+| `fitvision.shopify.shared-secret` | `SHOPIFY_SHARED_SECRET` | tem de igualar o `FITVISION_SHOPIFY_SHARED_SECRET` do `shopify-app` |
 | `fitvision.health.db.down-threshold-ms` | `DB_HEALTH_DOWN_MS` | default 2000; limiar do `/actuator/health` |
 | `fitvision.health.db.slow-threshold-ms` | `DB_HEALTH_SLOW_MS` | default 100 |
 | `fitvision.dashboard.url` | (valor fixo prod no ficheiro) | `https://app.fitvision.io` |
@@ -135,14 +135,16 @@
 
 | Conceito | Dev (.env.example) | Prod (application-prod.yml) |
 |----------|-------------------|-------------------------------|
-| JWT secret | `FITVISION_JWT_SECRET` | `JWT_SECRET`, fallback `FITVISION_JWT_SECRET` |
-| Shopify shared | `FITVISION_SHOPIFY_SHARED_SECRET` | `SHOPIFY_SHARED_SECRET`, fallback `FITVISION_SHOPIFY_SHARED_SECRET` |
-| Database | `DB_URL` | `DATABASE_URL`, fallback `DB_URL` |
+| JWT secret | `FITVISION_JWT_SECRET` | `JWT_SECRET` |
+| Shopify shared | `FITVISION_SHOPIFY_SHARED_SECRET` | `SHOPIFY_SHARED_SECRET` |
+| Database | `DB_URL` | `DATABASE_URL` |
 
-Desde o deploy Railway+Neon, o profile `prod` aceita **ambos** os nomes (placeholder com fallback),
-por isso podes usar o conjunto `FITVISION_*` / `DB_URL` — igual ao `.env.example` e ao `shopify-app` —
-em todos os serviços. O `shopify-app` (Node) só conhece `FITVISION_SHOPIFY_SHARED_SECRET`; o valor tem
-de ser idêntico ao do backend.
+O profile `prod` usa nomes diferentes do `.env.example` (por design — separa dev de prod). Não há
+fallback: cada nome tem de ser definido tal como a coluna "Prod" indica ou o contexto Spring não
+arranca (`Could not resolve placeholder`). Nota: placeholders aninhados como default
+(`${A:${B}}`) **não** servem para isto — o Spring resolve o interno primeiro e falha se `B` não
+existir. O `shopify-app` (Node) só conhece `FITVISION_SHOPIFY_SHARED_SECRET`; o valor tem de ser
+idêntico ao `SHOPIFY_SHARED_SECRET` do backend.
 
 ---
 
