@@ -70,7 +70,20 @@ public class ScraperService {
     public ScrapeJob triggerNow(UUID brandId, UUID adminStoreId) {
         Brand brand = brandRepository.findGlobalById(brandId)
                 .orElseThrow(() -> new FitVisionException(ErrorCode.BRAND_NOT_FOUND, "Global brand not found"));
-        return executeScrape(brand, adminStoreId);
+        return executeScrape(brand, adminStoreId, null);
+    }
+
+    /**
+     * Drives an already-created PENDING job (from {@link #createPendingJobRecord}) through
+     * to completion, rather than creating a second job row.
+     */
+    @Transactional
+    public ScrapeJob runPendingJob(UUID jobId, UUID adminStoreId) {
+        ScrapeJob job = scrapeJobRepository.findById(jobId)
+                .orElseThrow(() -> new FitVisionException(ErrorCode.VALIDATION_ERROR, "Scrape job not found: " + jobId));
+        Brand brand = brandRepository.findGlobalById(job.getBrandId())
+                .orElseThrow(() -> new FitVisionException(ErrorCode.BRAND_NOT_FOUND, "Global brand not found"));
+        return executeScrape(brand, adminStoreId, job);
     }
 
     /**
@@ -134,7 +147,7 @@ public class ScraperService {
         int totalPagesScraped = 0;
 
         for (Brand brand : brands) {
-            ScrapeJob job = executeScrape(brand, executorAdminStoreId);
+            ScrapeJob job = executeScrape(brand, executorAdminStoreId, null);
             totalEntriesFound += safeInt(job.getEntriesFound());
             totalPagesScraped += safeInt(job.getPagesScraped());
             if (job.getStatus() == ScrapeJobStatus.COMPLETED) {
@@ -155,15 +168,18 @@ public class ScraperService {
         );
     }
 
-    private ScrapeJob executeScrape(Brand brand, UUID executorStoreId) {
-        ScrapeJob job = new ScrapeJob();
-        job.setId(UUID.randomUUID());
-        job.setBrandId(brand.getId());
-        job.setStatus(ScrapeJobStatus.PENDING);
-        job.setCreatedAt(LocalDateTime.now());
-        job.setPagesScraped(0);
-        job.setEntriesFound(0);
-        job = scrapeJobRepository.save(job);
+    private ScrapeJob executeScrape(Brand brand, UUID executorStoreId, ScrapeJob existingJob) {
+        ScrapeJob job = existingJob;
+        if (job == null) {
+            job = new ScrapeJob();
+            job.setId(UUID.randomUUID());
+            job.setBrandId(brand.getId());
+            job.setStatus(ScrapeJobStatus.PENDING);
+            job.setCreatedAt(LocalDateTime.now());
+            job.setPagesScraped(0);
+            job.setEntriesFound(0);
+            job = scrapeJobRepository.save(job);
+        }
 
         BrandScraper scraper = scraperRegistry.findBySlug(brand.getSlug()).orElse(null);
         if (scraper == null) {

@@ -70,16 +70,20 @@ async function parseEnvelope<T>(response: Response): Promise<T> {
     throw new ApiError(message, response.status, code);
   }
 
-  if (!payload?.success || payload.data === null) {
-    if (payload === null && response.ok) {
-      return null as T;
-    }
+  // A 2xx with a non-JSON / empty body is a valid no-content response.
+  if (payload === null && response.ok) {
+    return null as T;
+  }
+
+  if (!payload?.success) {
     const message = payload?.error?.message || 'Unexpected API response.';
     const code = payload?.error?.code || 'INVALID_API_RESPONSE';
     throw new ApiError(message, response.status, code);
   }
 
-  return payload.data;
+  // success:true with data:null is legitimate for no-content actions
+  // (e.g. admin plan override). Callers that need data type T accordingly.
+  return payload.data as T;
 }
 
 async function request<T>(

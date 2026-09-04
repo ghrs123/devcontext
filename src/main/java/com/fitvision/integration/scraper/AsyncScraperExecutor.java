@@ -20,12 +20,12 @@ public class AsyncScraperExecutor {
     private static final Logger log = LoggerFactory.getLogger(AsyncScraperExecutor.class);
 
     @Async
-    public void execute(UUID brandId, UUID adminStoreId, ScraperService scraperService) {
+    public void execute(UUID jobId, UUID adminStoreId, ScraperService scraperService) {
         try {
-            scraperService.triggerNow(brandId, adminStoreId);
+            scraperService.runPendingJob(jobId, adminStoreId);
         } catch (Exception ex) {
-            // Job is already marked FAILED inside triggerNow/executeScrape.
-            log.warn("Async scrape execution failed for brandId={}: {}", brandId, ex.getMessage());
+            // Job is already marked FAILED inside runPendingJob/executeScrape.
+            log.warn("Async scrape execution failed for jobId={}: {}", jobId, ex.getMessage());
         }
     }
 }

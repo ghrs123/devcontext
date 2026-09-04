@@ -266,7 +266,7 @@ public class AdminService {
 
     public ScrapeJobResponse triggerBrandScrape(UUID brandId, UUID adminStoreId) {
         ScrapeJob pendingJob = scraperService.createPendingJobRecord(brandId);
-        asyncScraperExecutor.execute(brandId, adminStoreId, scraperService);
+        asyncScraperExecutor.execute(pendingJob.getId(), adminStoreId, scraperService);
         log.info("Admin action: trigger-brand-scrape adminStoreId={} brandId={} jobId={}",
                 adminStoreId, brandId, pendingJob.getId());
         Brand brand = brandRepository.findGlobalById(brandId).orElse(null);

@@ -26,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -138,5 +139,25 @@ class ScraperServiceTest {
 
         assertThat(job.getStatus()).isEqualTo(ScrapeJobStatus.FAILED);
         assertThat(job.getErrorMessage()).contains("No scraper registered");
+    }
+
+    @Test
+    void given_pendingJob_when_runPendingJob_then_reusesTheSameJobRow() throws Exception {
+        UUID jobId = UUID.randomUUID();
+        ScrapeJob pending = new ScrapeJob();
+        pending.setId(jobId);
+        pending.setBrandId(brandId);
+        pending.setStatus(ScrapeJobStatus.PENDING);
+        when(scrapeJobRepository.findById(jobId)).thenReturn(Optional.of(pending));
+        when(scraperRegistry.findBySlug("zara")).thenReturn(Optional.of(scraper));
+        when(scraper.scrape(zara)).thenThrow(new IllegalStateException("robots.txt disallows scraping"));
+
+        ScrapeJob result = service.runPendingJob(jobId, adminStoreId);
+
+        // Same row, not a second one.
+        assertThat(result.getId()).isEqualTo(jobId);
+        assertThat(result.getStatus()).isEqualTo(ScrapeJobStatus.FAILED);
+        // No new PENDING job was ever created — save() only ever persists `pending`.
+        verify(scrapeJobRepository, never()).save(argThat(j -> j != pending));
     }
 }
