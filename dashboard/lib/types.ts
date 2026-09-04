@@ -131,6 +131,46 @@ export interface AnalyticsSummary {
   topProducts: ProductRecommendationStat[];
 }
 
+export interface ProductHealthRow {
+  productId: string;
+  productName: string;
+  hasSizeChart: boolean;
+  totalRecommendations: number;
+  noMatchCount: number;
+  noMatchRate: number;
+  averageConfidence: number;
+  attentionScore: number;
+  reasons: Array<'NO_SIZE_CHART' | 'HIGH_NO_MATCH' | 'LOW_CONFIDENCE'>;
+}
+
+export interface SimulateRequest {
+  productId?: string;
+  externalProductId?: string;
+  heightCm: number;
+  weightKg: number;
+  gender?: string;
+  age?: number;
+}
+
+export interface SimulateResponse {
+  productName: string;
+  brandName: string | null;
+  hasSizeChart: boolean;
+  recommendedSize: string | null;
+  confidenceScore: number;
+  confidenceLabel: 'High' | 'Medium' | 'Low';
+  quality: 'EXACT' | 'PARTIAL' | 'CLOSEST' | 'NO_MATCH';
+  estimatedProfile: { bmi: number; chestCm: number; waistCm: number; hipCm: number };
+  sizeChart: Array<{
+    size: string;
+    chest: { min: number | null; max: number | null };
+    waist: { min: number | null; max: number | null };
+    hip: { min: number | null; max: number | null };
+    height: { min: number | null; max: number | null };
+    recommended: boolean;
+  }>;
+}
+
 export interface SpringPage<T> {
   content: T[];
   number: number;

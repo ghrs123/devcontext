@@ -4,6 +4,7 @@ import Link from 'next/link';
 import useSWR from 'swr';
 import { Activity, CalendarClock, Layers, Sparkles } from 'lucide-react';
 
+import { AttentionList } from '@/components/app/AttentionList';
 import { QualityChart } from '@/components/app/QualityChart';
 import { StatCard } from '@/components/app/StatCard';
 import { TopProductsTable } from '@/components/app/TopProductsTable';
@@ -140,6 +141,8 @@ export default function DashboardPage() {
         <QualityChart distribution={summary.qualityDistribution || {}} />
         <TopProductsTable products={summary.topProducts || []} />
       </section>
+
+      <AttentionList />
     </div>
   );
 }

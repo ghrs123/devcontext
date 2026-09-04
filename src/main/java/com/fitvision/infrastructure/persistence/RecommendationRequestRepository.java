@@ -52,6 +52,21 @@ public interface RecommendationRequestRepository extends JpaRepository<Recommend
         """)
     List<Object[]> findTopProductsByTenantId(@Param("tenantId") UUID tenantId, Pageable pageable);
 
+    /**
+     * Per-product recommendation health: [productId, total, noMatchCount, avgConfidence].
+     * Rows exist only for products that have received at least one recommendation.
+     */
+    @Query("""
+        SELECT r.productId,
+           COUNT(r),
+           SUM(CASE WHEN r.recommendedSize = 'NO_MATCH' THEN 1 ELSE 0 END),
+           AVG(r.confidenceScore)
+        FROM RecommendationRequest r
+        WHERE r.tenantId = :tenantId
+        GROUP BY r.productId
+        """)
+    List<Object[]> findProductHealthByTenantId(@Param("tenantId") UUID tenantId);
+
     long countByCreatedAtAfter(LocalDateTime after);
 
     @Query("SELECT AVG(r.confidenceScore) FROM RecommendationRequest r")

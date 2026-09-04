@@ -102,6 +102,60 @@ class RecommendationEngineTest {
     }
 
     // -------------------------------------------------------------------------
+    // Simulator (dry run)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void given_input_when_simulate_then_returnsResultWithoutPersistingOrCheckingPlan() {
+        RecommendationInput input = RecommendationInput.builder()
+                .tenantId(tenantId)
+                .productId(productId)
+                .heightCm(175)
+                .weightKg(75)
+                .gender(Gender.MALE)
+                .age(30)
+                .storeBodyData(false)
+                .build();
+
+        SizeEntry entryM = sizeEntry("M", 94, 102, 82, 90, 92, 100);
+        when(productRepository.findByIdAndTenantId(productId, tenantId)).thenReturn(Optional.of(product));
+        when(sizeChartRepository.findActiveByProductIdAndTenantId(productId, tenantId))
+                .thenReturn(Optional.of(sizeChart));
+        when(sizeEntryRepository.findAllBySizeChartId(sizeChartId)).thenReturn(List.of(entryM));
+        when(brandRepository.findById(brandId)).thenReturn(Optional.of(brand));
+
+        SimulationResult result = engine.simulate(input);
+
+        assertNotNull(result.match().getRecommendedSize());
+        assertTrue(result.hasSizeChart());
+        assertEquals("Test Shirt", result.productName());
+        assertTrue(result.profile().getEstimatedChestCm() > 0);
+        assertEquals(1, result.entries().size());
+
+        verifyNoInteractions(recommendationRequestRepository);
+        verifyNoInteractions(planLimitsService);
+    }
+
+    @Test
+    void given_productWithoutChart_when_simulate_then_returnsNoMatchAndDoesNotPersist() {
+        RecommendationInput input = RecommendationInput.builder()
+                .tenantId(tenantId).productId(productId)
+                .heightCm(175).weightKg(75).gender(Gender.MALE).storeBodyData(false)
+                .build();
+        when(productRepository.findByIdAndTenantId(productId, tenantId)).thenReturn(Optional.of(product));
+        when(sizeChartRepository.findActiveByProductIdAndTenantId(productId, tenantId))
+                .thenReturn(Optional.empty());
+        when(brandRepository.findById(brandId)).thenReturn(Optional.of(brand));
+
+        SimulationResult result = engine.simulate(input);
+
+        assertFalse(result.hasSizeChart());
+        assertEquals(MatchResult.MatchQuality.NO_MATCH, result.match().getQuality());
+        verifyNoInteractions(recommendationRequestRepository);
+        verifyNoInteractions(planLimitsService);
+    }
+
+    // -------------------------------------------------------------------------
     // Happy path
     // -------------------------------------------------------------------------
 

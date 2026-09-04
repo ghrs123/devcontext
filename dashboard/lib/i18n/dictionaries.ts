@@ -181,7 +181,41 @@ const pt = {
   'admin.recommendations.subtitle': 'Recomendações recentes em todas as lojas.',
   'admin.health.title': 'Estado do sistema',
   'admin.health.subtitle': 'Saúde dos componentes e pipeline de scraping.',
-  'admin.backToStore': 'Voltar ao painel da loja'
+  'admin.backToStore': 'Voltar ao painel da loja',
+
+  'nav.simulator': 'Simulador',
+
+  'sim.title': 'Simulador de recomendação',
+  'sim.subtitle': 'Veja como o FitVision recomendaria um tamanho para um produto — sem afetar as suas métricas.',
+  'sim.product': 'Produto',
+  'sim.selectProduct': 'Escolher um produto',
+  'sim.height': 'Altura (cm)',
+  'sim.weight': 'Peso (kg)',
+  'sim.gender': 'Género',
+  'sim.age': 'Idade',
+  'sim.run': 'Simular',
+  'sim.running': 'A simular…',
+  'sim.noProducts': 'Adicione um produto primeiro para poder simular.',
+  'sim.result': 'Tamanho recomendado',
+  'sim.noChart': 'Este produto ainda não tem tabela de tamanhos — não é possível recomendar.',
+  'sim.estimated': 'Estimativa corporal',
+  'sim.estimatedNote': 'Calculada a partir de altura, peso, sexo e idade (não são medidas reais).',
+  'sim.bmi': 'IMC',
+  'sim.chestChart': 'Tabela usada',
+  'sim.recommendedRow': 'Linha recomendada',
+  'sim.gender.male': 'Masculino',
+  'sim.gender.female': 'Feminino',
+  'sim.gender.unisex': 'Unissexo',
+
+  'attention.title': 'Produtos em atenção',
+  'attention.subtitle': 'Produtos que podem precisar de revisão para melhorar a qualidade das recomendações.',
+  'attention.empty': 'Nada a rever — todos os produtos ativos têm boa cobertura.',
+  'attention.viewAll': 'Ver todos',
+  'attention.reason.NO_SIZE_CHART': 'Sem tabela de tamanhos',
+  'attention.reason.HIGH_NO_MATCH': '{rate}% sem correspondência',
+  'attention.reason.LOW_CONFIDENCE': 'Confiança média baixa ({conf}%)',
+  'attention.recs': '{count} recomendações',
+  'attention.score': 'atenção {score}'
 } as const;
 
 const en: Record<keyof typeof pt, string> = {
@@ -361,7 +395,41 @@ const en: Record<keyof typeof pt, string> = {
   'admin.recommendations.subtitle': 'Recent recommendations across all stores.',
   'admin.health.title': 'System health',
   'admin.health.subtitle': 'Component health and the scraping pipeline.',
-  'admin.backToStore': 'Back to store dashboard'
+  'admin.backToStore': 'Back to store dashboard',
+
+  'nav.simulator': 'Simulator',
+
+  'sim.title': 'Recommendation simulator',
+  'sim.subtitle': "See how FitVision would recommend a size for a product — without touching your metrics.",
+  'sim.product': 'Product',
+  'sim.selectProduct': 'Choose a product',
+  'sim.height': 'Height (cm)',
+  'sim.weight': 'Weight (kg)',
+  'sim.gender': 'Gender',
+  'sim.age': 'Age',
+  'sim.run': 'Simulate',
+  'sim.running': 'Simulating…',
+  'sim.noProducts': 'Add a product first to run a simulation.',
+  'sim.result': 'Recommended size',
+  'sim.noChart': "This product has no size chart yet — a size can't be recommended.",
+  'sim.estimated': 'Estimated body',
+  'sim.estimatedNote': 'Derived from height, weight, sex and age (not real measurements).',
+  'sim.bmi': 'BMI',
+  'sim.chestChart': 'Chart used',
+  'sim.recommendedRow': 'Recommended row',
+  'sim.gender.male': 'Male',
+  'sim.gender.female': 'Female',
+  'sim.gender.unisex': 'Unisex',
+
+  'attention.title': 'Products needing attention',
+  'attention.subtitle': 'Products that may need review to improve recommendation quality.',
+  'attention.empty': 'Nothing to review — every active product has solid coverage.',
+  'attention.viewAll': 'View all',
+  'attention.reason.NO_SIZE_CHART': 'No size chart',
+  'attention.reason.HIGH_NO_MATCH': '{rate}% inconclusive',
+  'attention.reason.LOW_CONFIDENCE': 'Low average confidence ({conf}%)',
+  'attention.recs': '{count} recommendations',
+  'attention.score': 'attention {score}'
 };
 
 export type TranslationKey = keyof typeof pt;

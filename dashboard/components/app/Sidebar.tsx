@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Package, Settings, X } from 'lucide-react';
+import { BarChart3, FlaskConical, Package, Settings, X } from 'lucide-react';
 
 import { LogoMark } from '@/components/brand/Logo';
 import { LanguageSwitcher } from '@/components/app/LanguageSwitcher';
@@ -21,6 +21,7 @@ type SidebarProps = {
 const NAV: Array<{ href: string; key: TranslationKey; icon: typeof BarChart3 }> = [
   { href: '/dashboard', key: 'nav.overview', icon: BarChart3 },
   { href: '/products', key: 'nav.products', icon: Package },
+  { href: '/simulator', key: 'nav.simulator', icon: FlaskConical },
   { href: '/settings', key: 'nav.settings', icon: Settings }
 ];
 

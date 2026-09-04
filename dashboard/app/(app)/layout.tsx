@@ -14,6 +14,7 @@ import type { TranslationKey } from '@/lib/i18n/dictionaries';
 const TITLE_KEYS: Array<{ prefix: string; key: TranslationKey }> = [
   { prefix: '/dashboard', key: 'nav.overview' },
   { prefix: '/products', key: 'nav.products' },
+  { prefix: '/simulator', key: 'nav.simulator' },
   { prefix: '/settings', key: 'nav.settings' }
 ];
 

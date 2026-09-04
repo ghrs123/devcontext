@@ -34,6 +34,12 @@ public class AnalyticsController {
         return ResponseEntity.ok(ApiResponse.ok(summary));
     }
 
+    @GetMapping("/product-health")
+    public ResponseEntity<ApiResponse<java.util.List<ProductHealthRow>>> getProductHealth() {
+        UUID tenantId = TenantContext.get();
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getProductHealth(tenantId)));
+    }
+
     @GetMapping("/recommendations")
     public ResponseEntity<ApiResponse<Page<RecommendationRequest>>> getRecommendations(
             @RequestParam(defaultValue = "0") int page,

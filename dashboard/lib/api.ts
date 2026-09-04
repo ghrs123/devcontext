@@ -13,8 +13,11 @@ import type {
   GlobalBrandSizeChartVersion,
   LoginRequest,
   Product,
+  ProductHealthRow,
   ProductRequest,
   ScrapeJobResponse,
+  SimulateRequest,
+  SimulateResponse,
   SpringPage,
   StoreAdminView,
   RegisterRequest,
@@ -257,6 +260,17 @@ export const api = {
 
   getAnalyticsSummary(): Promise<AnalyticsSummary> {
     return request<AnalyticsSummary>('/api/dashboard/v1/analytics/summary');
+  },
+
+  getProductHealth(): Promise<ProductHealthRow[]> {
+    return request<ProductHealthRow[]>('/api/dashboard/v1/analytics/product-health');
+  },
+
+  simulateRecommendation(body: SimulateRequest): Promise<SimulateResponse> {
+    return request<SimulateResponse>('/api/dashboard/v1/recommendations/simulate', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
   },
 
   adminGetMetrics(): Promise<AdminMetrics> {

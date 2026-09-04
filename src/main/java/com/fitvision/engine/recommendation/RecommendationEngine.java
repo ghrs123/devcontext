@@ -85,6 +85,49 @@ public class RecommendationEngine {
      * @throws com.fitvision.shared.exception.InvalidBodyMeasurementException if height/weight are out of range
      * @throws ProductNotFoundException if the product does not exist for the given tenant
      */
+    /**
+     * Dry-run recommendation for the store owner's simulator: same engine, but it never
+     * persists a {@code recommendation_requests} row, never checks or increments the plan
+     * limit, and returns the intermediate reasoning ({@link SimulationResult}).
+     *
+     * @throws com.fitvision.shared.exception.InvalidBodyMeasurementException if height/weight are out of range
+     * @throws ProductNotFoundException if the product does not exist for the given tenant
+     */
+    public SimulationResult simulate(RecommendationInput input) {
+        Gender gender = input.getGender() != null ? input.getGender() : Gender.UNISEX;
+        BodyProfile profile = bodyProfileCalculator.calculate(
+                input.getHeightCm(), input.getWeightKg(), gender, input.getAge());
+
+        Product product;
+        if (input.getProductId() != null) {
+            product = productRepository.findByIdAndTenantId(input.getProductId(), input.getTenantId())
+                    .orElseThrow(() -> new ProductNotFoundException(
+                            "Product not found: productId=" + input.getProductId()
+                                    + ", tenantId=" + input.getTenantId()));
+        } else {
+            product = productRepository
+                    .findByExternalProductIdAndTenantId(input.getExternalProductId(), input.getTenantId())
+                    .orElseThrow(() -> new ProductNotFoundException(
+                            "Product not found: externalProductId=" + input.getExternalProductId()
+                                    + ", tenantId=" + input.getTenantId()));
+        }
+
+        String brandName = product.getBrandId() != null
+                ? brandRepository.findById(product.getBrandId()).map(Brand::getName).orElse(null)
+                : null;
+
+        Optional<SizeChart> chart = sizeChartRepository
+                .findActiveByProductIdAndTenantId(product.getId(), input.getTenantId());
+        if (chart.isEmpty()) {
+            return new SimulationResult(MatchResult.noMatch(), profile, List.of(),
+                    product.getName(), brandName, false);
+        }
+
+        List<SizeEntry> entries = sizeEntryRepository.findAllBySizeChartId(chart.get().getId());
+        MatchResult match = sizeChartMatcher.match(profile, entries);
+        return new SimulationResult(match, profile, entries, product.getName(), brandName, true);
+    }
+
     @Transactional
     public RecommendationOutput recommend(RecommendationInput input) {
         long start = System.currentTimeMillis();
